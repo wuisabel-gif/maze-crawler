@@ -83,6 +83,24 @@ For example:
 
 Working on the project also reinforced an important lesson from `CSCI 104`: an algorithm is not just about correctness, but also about tradeoffs between efficiency, flexibility, memory, and behavior under imperfect conditions. In that sense, the bot became more than a Kaggle competition entry. It became a larger systems-style application of core computer science concepts to real-time decision making under uncertainty.
 
+## Progress Update
+
+### Update: May 19, 2026
+
+One of the most encouraging milestones so far was seeing the bot improve from roughly the `400+` range to the `670+` range on the competition ladder. While that jump does not prove the agent is "solved," it does suggest that the recent architectural changes made the policy substantially more stable and less wasteful.
+
+The improvement seems to come from a few specific changes working together:
+
+- replacing mostly local greedy movement with more deliberate search-based planning
+- improving factory survival through better northward routing and jump-aware navigation
+- reducing friendly interference through destination reservation and cleaner unit coordination
+- using maze symmetry to make better movement decisions before the full map is visible
+- preserving economically useful information such as mining-node locations instead of repeatedly rediscovering them
+
+In practical terms, the newer versions appear to lose fewer games to avoidable mistakes. Earlier versions often wasted turns in loops, took weaker local routes, or failed to convert partial map knowledge into better movement decisions. The updated versions behave more consistently, which likely matters a lot in a ladder setting where avoiding bad losses can be just as important as finding flashy wins.
+
+This update also reinforced a useful lesson for the project as a whole: performance gains did not come from one isolated trick, but from tightening the system end to end. Better search, better state management, and better coordination each contributed a little, and together they produced a noticeably stronger bot.
+
 ## Current Status
 
 The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, A*-based path planning on discovered terrain, and differentiated behavior across scouts, workers, miners, and the factory. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.
