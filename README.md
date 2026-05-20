@@ -85,7 +85,7 @@ Working on the project also reinforced an important lesson from `CSCI 104`: an a
 
 ## Progress Update
 
-### Update: May 19, 2026
+### 1. Search and Stability
 
 One of the most encouraging milestones so far was seeing the bot improve from roughly the `400+` range to the `670+` range on the competition ladder. While that jump does not prove the agent is "solved," it does suggest that the recent architectural changes made the policy substantially more stable and less wasteful.
 
@@ -100,6 +100,40 @@ The improvement seems to come from a few specific changes working together:
 In practical terms, the newer versions appear to lose fewer games to avoidable mistakes. Earlier versions often wasted turns in loops, took weaker local routes, or failed to convert partial map knowledge into better movement decisions. The updated versions behave more consistently, which likely matters a lot in a ladder setting where avoiding bad losses can be just as important as finding flashy wins.
 
 This update also reinforced a useful lesson for the project as a whole: performance gains did not come from one isolated trick, but from tightening the system end to end. Better search, better state management, and better coordination each contributed a little, and together they produced a noticeably stronger bot.
+
+### 2. Factory Danger Mode
+
+Another important improvement came from replay-driven debugging rather than from adding a brand-new algorithm. After analyzing a losing episode, it became clear that the bot was still making the wrong choices under heavy scroll pressure: the factory could continue spending energy on support behavior, drift sideways or backward, and even spawn units when survival should have been the only priority.
+
+To address that, the agent was updated with a more explicit factory danger mode. When the factory gets too close to the southern boundary, normal convoy logic is temporarily overridden. In that state, the bot stops feeding workers, stops spawning new units, and switches into a survival-only routing mode focused on moving `NORTH`, `EAST`, or `WEST` without allowing low-value detours. Jump logic also remains available as an emergency escape tool.
+
+This change matters because the previous losses were not always caused by weak pathfinding in the abstract. Sometimes the bot already knew enough to survive, but its policy priorities were wrong. The factory was still behaving like a coordinator when it needed to behave like a fleeing VIP. The May 20 update made that distinction much sharper.
+
+More broadly, this was a useful reminder that strong competition bots are often improved less by adding complexity and more by removing bad behavior in the highest-risk states. In this case, the replay showed that late-game survival logic needed to be stricter, and tightening that rule set was likely more valuable than adding another economic or exploration feature.
+
+### 3. Energy Reserve Fix
+
+Another replay exposed a different type of failure: the factory was not dying because it got trapped too low on the board, but because it slowly bankrupted itself. In that episode, the factory remained alive and reasonably well-positioned for a long time, but by roughly turn `191` it had reached `0` energy. From that point onward, it was effectively a dead object sitting on the board until the scroll finally removed it much later.
+
+This loss showed that the problem was not mainly pathfinding. It was an economic collapse caused by overspending on workers and then transferring too much energy into them. The factory was behaving like an unlimited battery for its support units even when preserving its own energy reserve should have been the higher priority.
+
+To address that, the agent was updated with stricter factory energy reserve rules. Worker, scout, and miner production now require larger minimum energy buffers, and factory-to-worker transfers are only allowed when the factory is both safe and meaningfully rich. In other words, the bot now treats factory energy as a protected survival resource rather than something that can always be spent on support behavior.
+
+This update also coincided with another meaningful ladder improvement, with the bot moving from roughly the `670+` range into the `730+` range. As with the earlier score jump, that increase should not be read as proof that the agent is finished, but it does suggest that protecting factory energy made the policy more stable over long games and reduced another major source of avoidable losses.
+
+This change reinforced another important lesson from the project: a bot can still lose even when it survives physically if it stops functioning economically. The replay made it clear that long-term survival depends not just on staying ahead of the scroll, but also on protecting enough factory energy to remain an active decision-maker deep into the game.
+
+### 4. Early Mine Economy Response
+
+![Battle against AI TOOK MY JOB AND YOUR JOB!](assets/battle_may_19.gif)
+
+Another important lesson came from losing to a bot named `AI TOOK MY JOB AND YOUR JOB!`. That replay showed a different strategic weakness: even when the convoy logic was relatively stable, the agent could still lose badly to an opponent that established an early mine economy and then snowballed factory energy from it.
+
+In that match, the opponent transformed a miner into a mine very early and used that long-term income source to outscale the convoy-based strategy. Their factory energy kept compounding while the bot continued investing mostly in workers and survival structure. The result was not a sudden tactical collapse, but a slower strategic defeat caused by being economically outclassed.
+
+To address that, the miner policy was updated to respond more aggressively when known mining nodes are nearby and realistically reachable. The bot still treats factory survival as the top priority, but it is now more willing to open an early miner line when the opportunity is strong enough to matter. The goal of this change was not to abandon the safer convoy architecture, but to prevent obviously favorable mine opportunities from being ignored while an opponent scales uncontested.
+
+This update reinforced a broader systems insight: a stable bot can still be strategically incomplete if it survives well but never develops a meaningful answer to compounding income. In other words, safety and economy are not competing ideas in this environment; a competitive agent eventually needs both.
 
 ## Current Status
 
