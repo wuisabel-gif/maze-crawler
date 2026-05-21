@@ -159,6 +159,10 @@ This change reinforced a theme that kept appearing throughout the project: bette
 
 ### 7. Miner Commitment Filter
 
+![Rank 7 leaderboard milestone](assets/no7.jpg)
+
+This update also came with another nice leaderboard bump. After tightening miner commitment, the bot moved up from the earlier top `10` range into rank `7`, with the score climbing to roughly `1133.4`. That was a useful sign that being more selective about when to start a miner plan was not just theoretically cleaner, but actually helping the agent convert decisions into more stable ladder performance.
+
 The mining logic had a subtler problem too. The bot could correctly recognize that mining was strategically important, but still commit to the wrong miner at the wrong time. In one loss, a second miner was built off weak information, never successfully transformed into a mine, and ended up behaving more like a `300`-energy sink than a long-term investment.
 
 That failure highlighted an important distinction between noticing a possible mining opportunity and having enough evidence to justify spending on it. A remembered node somewhere on the map was not always enough. If the path was uncertain, the scroll was already tightening, or a first mine was already established, then opening another miner line could be more harmful than helpful.
@@ -168,6 +172,10 @@ To address that, miner production was made much more selective. Early miner buil
 This update reinforced one of the core lessons of the project: good economic strategy is not just about recognizing what could be valuable, but also about filtering out opportunities that are too uncertain to justify the cost. In practice, that made the bot more disciplined about when to pursue mining and when to keep the factory economy intact.
 
 ### 8. Miner Abort Logic
+
+![Rank 6 leaderboard milestone](assets/no-6.jpg)
+
+This change also lined up with another small but encouraging leaderboard step forward. After improving miner abort behavior, the bot moved up again from rank `7` to rank `6`, with the score reaching about `1158.3`. That was a nice confirmation that it was not enough for the agent to recognize mining opportunities; it also needed to know when to cut a bad mining plan short before the factory paid too much for it.
 
 Even after tightening when miners could be built, it became clear that better miner production rules were still not enough on their own. A miner that failed to reach a real node could still sit on the board as an expensive, low-value unit while the factory economy weakened around it. In other words, the bot was getting a little better at deciding when to start a miner plan, but not yet good enough at deciding when to give up on one.
 
@@ -184,6 +192,10 @@ To address that, the factory decision layer was updated with a factory-trade fil
 This change reinforced another important principle from the project: tactical survival is not just about staying alive one more turn, but also about understanding what kind of endgame a move is creating. A factory trade can be fine when the tiebreak is favorable, but it becomes a blunder when the opponent is the side that benefits from both factories disappearing.
 
 ### 10. Stale Miner Recovery
+
+![Rank 5 leaderboard milestone](assets/no-5.jpg)
+
+This update also matched another step up on the leaderboard. After adding stale miner recovery, the bot climbed from rank `6` to rank `5`, with the score reaching about `1175.7`. That felt like a good confirmation that tracking whether miners were actually making progress, instead of just assuming they were still useful, was improving the bot in a very practical way.
 
 As the competition went on, it became clear that even with stricter miner production and abort rules, a miner could still fail in a quieter way. It might never transform, never return its energy, and still sit in roughly the same area long enough to become a slow economic drain on the factory. In those cases, the bot was technically "aware" that the miner plan was getting worse, but it was still reacting too late to actually save the value.
 
@@ -208,6 +220,10 @@ To address that, mine creation was made more selective and more tightly connecte
 This update mattered because it sharpened the difference between nominal value and usable value. A full mine is only an advantage if the bot can actually turn that stored energy back into factory survival or future production. By filtering out low-harvest mines and improving follow-through on rich ones, the agent moved closer to a more complete mine-to-factory economy loop.
 
 ### 13. Build Pressure Control
+
+![Rank 4 leaderboard milestone](assets/no-4.jpg)
+
+This update also came with another big leaderboard milestone. After tightening build pressure control, the bot moved up from rank `5` to rank `4`, with the score reaching about `1190.8`. That was especially satisfying because it showed that being more disciplined about when to stop building could matter just as much as adding new movement or mining logic.
 
 As the competition continued, another pattern became hard to ignore. Even when parts of the economy were working, the factory could still keep producing support units after the board was already cluttered with stranded or low-value pieces. In those games, the issue was not always the first build decision. It was the cumulative pressure of continuing to spend after earlier units had already stopped contributing enough to justify more production.
 
