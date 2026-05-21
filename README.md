@@ -87,7 +87,7 @@ Working on the project also reinforced an important lesson from `CSCI 104`: an a
 
 ### 1. Search and Stability
 
-One of the most encouraging milestones so far was seeing the bot improve from roughly the `400+` range to the `670+` range on the competition ladder. While that jump does not prove the agent is "solved," it does suggest that the recent architectural changes made the policy substantially more stable and less wasteful.
+One of the first really encouraging moments in this project was seeing the bot move from roughly the `400+` range to the `670+` range on the competition ladder. That jump did not mean the agent was suddenly "done," but it was the first strong sign that the underlying direction was getting better. The bot was still simple in a lot of ways, but it was starting to make fewer obviously bad decisions.
 
 The improvement seems to come from a few specific changes working together:
 
@@ -97,23 +97,23 @@ The improvement seems to come from a few specific changes working together:
 - using maze symmetry to make better movement decisions before the full map is visible
 - preserving economically useful information such as mining-node locations instead of repeatedly rediscovering them
 
-In practical terms, the newer versions appear to lose fewer games to avoidable mistakes. Earlier versions often wasted turns in loops, took weaker local routes, or failed to convert partial map knowledge into better movement decisions. The updated versions behave more consistently, which likely matters a lot in a ladder setting where avoiding bad losses can be just as important as finding flashy wins.
+In practical terms, the newer versions seemed to lose fewer games to avoidable mistakes. Earlier versions often wasted turns in loops, took weak local routes, or failed to turn partial map knowledge into better movement decisions. Once those problems were reduced, the whole bot started feeling less random. That matters a lot in a ladder setting, because sometimes avoiding one bad loss is worth more than finding one flashy win.
 
 This update also reinforced a useful lesson for the project as a whole: performance gains did not come from one isolated trick, but from tightening the system end to end. Better search, better state management, and better coordination each contributed a little, and together they produced a noticeably stronger bot.
 
 ### 2. Factory Danger Mode
 
-Another important improvement came from replay-driven debugging rather than from adding a brand-new algorithm. After analyzing a losing episode, it became clear that the bot was still making the wrong choices under heavy scroll pressure: the factory could continue spending energy on support behavior, drift sideways or backward, and even spawn units when survival should have been the only priority.
+A lot of the next improvement did not come from adding some fancy new algorithm. It came from sitting down with losing replays and noticing that the factory was still making the wrong choices once the scroll got close. The bot could keep spending energy on support behavior, drift sideways or backward, and even spawn units at exactly the moment when survival should have been the only thing that mattered.
 
 To address that, the agent was updated with a more explicit factory danger mode. When the factory gets too close to the southern boundary, normal convoy logic is temporarily overridden. In that state, the bot stops feeding workers, stops spawning new units, and switches into a survival-only routing mode focused on moving `NORTH`, `EAST`, or `WEST` without allowing low-value detours. Jump logic also remains available as an emergency escape tool.
 
-This change matters because the previous losses were not always caused by weak pathfinding in the abstract. Sometimes the bot already knew enough to survive, but its policy priorities were wrong. The factory was still behaving like a coordinator when it needed to behave like a fleeing VIP. The May 20 update made that distinction much sharper.
+This change mattered because those losses were not always caused by pathfinding in the abstract. Sometimes the bot already knew enough to survive, but its priorities were simply wrong. The factory was still acting like a coordinator when it really needed to act like the one unit that everything else should revolve around.
 
 More broadly, this was a useful reminder that strong competition bots are often improved less by adding complexity and more by removing bad behavior in the highest-risk states. In this case, the replay showed that late-game survival logic needed to be stricter, and tightening that rule set was likely more valuable than adding another economic or exploration feature.
 
 ### 3. Energy Reserve Fix
 
-Another replay exposed a different type of failure: the factory was not dying because it got trapped too low on the board, but because it slowly bankrupted itself. In that episode, the factory remained alive and reasonably well-positioned for a long time, but by roughly turn `191` it had reached `0` energy. From that point onward, it was effectively a dead object sitting on the board until the scroll finally removed it much later.
+The next lesson was a different kind of failure entirely. The factory was not dying because it was trapped too low on the board. It was dying because it was slowly bankrupting itself. In one episode, the factory stayed alive and looked fine positionally for a long time, but by roughly turn `191` it had reached `0` energy. From then on, it was basically a dead object waiting for the scroll to finish the job.
 
 This loss showed that the problem was not mainly pathfinding. It was an economic collapse caused by overspending on workers and then transferring too much energy into them. The factory was behaving like an unlimited battery for its support units even when preserving its own energy reserve should have been the higher priority.
 
@@ -127,7 +127,7 @@ This change reinforced another important lesson from the project: a bot can stil
 
 ![Battle against AI TOOK MY JOB AND YOUR JOB!](assets/battle_may_19.gif)
 
-Another important lesson came from losing to a bot named `AI TOOK MY JOB AND YOUR JOB!`. That replay showed a different strategic weakness: even when the convoy logic was relatively stable, the agent could still lose badly to an opponent that established an early mine economy and then snowballed factory energy from it.
+One of the clearest strategic wake-up calls came from losing to a bot named `AI TOOK MY JOB AND YOUR JOB!`. That match showed that even if the convoy logic was relatively stable, the agent could still lose badly to an opponent that got an early mine economy running and then snowballed factory energy from there.
 
 In that match, the opponent transformed a miner into a mine very early and used that long-term income source to outscale the convoy-based strategy. Their factory energy kept compounding while the bot continued investing mostly in workers and survival structure. The result was not a sudden tactical collapse, but a slower strategic defeat caused by being economically outclassed.
 
@@ -135,6 +135,90 @@ To address that, the miner policy was updated to respond more aggressively when 
 
 This update reinforced a broader systems insight: a stable bot can still be strategically incomplete if it survives well but never develops a meaningful answer to compounding income. In other words, safety and economy are not competing ideas in this environment; a competitive agent eventually needs both.
 
+### 5. Lean No-Mine Production
+
+After the earlier survival and energy fixes, a new late-game pattern started showing up pretty clearly. The bot could still make poor production decisions in long tiebreak-heavy games. In one replay, the factory even survived all the way to the step-500 tiebreaker, but the agent still lost because it spent too much of its economy on extra workers and a scout without ever turning that spending into a mine or a real long-term advantage.
+
+The replay made the problem clear: the early mine-response logic was not actually the reason for the loss, because no miner was built and no mine was created. Instead, the bot kept expanding its support structure in a game where there was no concrete mine opportunity on the board. The result was a bloated convoy, lower factory reserves, and a much weaker total-energy position by the end of the match.
+
+To address that, the production policy was tightened again. When there are no known open mining nodes, the factory now treats that as a signal to play much leaner. In those games, worker count is capped more aggressively, scouts are delayed behind a higher energy threshold, and larger unit production is reserved for situations where there is either a real mining plan or a stronger strategic reason to spend.
+
+This was an important adjustment because it sharpened the distinction between two different game states. If a promising mining node exists, the bot should be willing to invest. If no such opportunity exists, then preserving factory energy for movement, survival, and the final tiebreak is often the better strategy. In that sense, this update was less about adding a new feature and more about teaching the bot when not to overbuild.
+
+This round of production tightening also led to the strongest leaderboard jump so far, pushing the agent into the top `10` of the competition and reaching roughly the `1100+` range. That result was especially encouraging because it came not from adding a flashy new mechanic, but from making the bot more disciplined about when not to spend. In a long-horizon environment like Maze Crawler, that kind of restraint turned out to be just as important as pathfinding or exploration.
+
+### 6. Scout Production Clamp
+
+![Top 10 leaderboard placement](assets/top-10.jpg)
+
+By this point in the competition, one production leak stood out almost immediately: the bot could keep spawning replacement scouts even when the earlier scouts had already transferred their energy, dropped to `0`, and become basically useless. They were not creating meaningful value anymore, but they were still costing build energy and weakening the late-game factory economy.
+
+To address that, scout production was tightened much more aggressively. The factory now treats scouts as a high-quality luxury rather than a default exploration tool. In practice, that means scouts are no longer built in no-mine games, new scouts are blocked while stranded zero-energy scouts are still on the board, and even valid scout production requires a richer factory state and a larger safety buffer from the scroll.
+
+This change reinforced a theme that kept appearing throughout the project: better performance often came from removing low-value behavior rather than adding more complexity. In this case, cutting speculative scout production helped preserve factory energy for the situations that actually decide games, especially long tiebreak-heavy matches where the final energy total matters just as much as surviving the maze itself.
+
+### 7. Miner Commitment Filter
+
+The mining logic had a subtler problem too. The bot could correctly recognize that mining was strategically important, but still commit to the wrong miner at the wrong time. In one loss, a second miner was built off weak information, never successfully transformed into a mine, and ended up behaving more like a `300`-energy sink than a long-term investment.
+
+That failure highlighted an important distinction between noticing a possible mining opportunity and having enough evidence to justify spending on it. A remembered node somewhere on the map was not always enough. If the path was uncertain, the scroll was already tightening, or a first mine was already established, then opening another miner line could be more harmful than helpful.
+
+To address that, miner production was made much more selective. Early miner builds now require a nearby visible mining node rather than only remembered information, the factory must have a healthier energy cushion before committing, and speculative follow-up miners are blocked once a friendly mine already exists. The bot can still invest in mining, but it now needs a clearer signal that the investment is likely to convert into real long-term value.
+
+This update reinforced one of the core lessons of the project: good economic strategy is not just about recognizing what could be valuable, but also about filtering out opportunities that are too uncertain to justify the cost. In practice, that made the bot more disciplined about when to pursue mining and when to keep the factory economy intact.
+
+### 8. Miner Abort Logic
+
+Even after tightening when miners could be built, it became clear that better miner production rules were still not enough on their own. A miner that failed to reach a real node could still sit on the board as an expensive, low-value unit while the factory economy weakened around it. In other words, the bot was getting a little better at deciding when to start a miner plan, but not yet good enough at deciding when to give up on one.
+
+To address that, the miner policy was extended with explicit abort logic. Miners now evaluate whether a node plan is still credible based on distance, scroll pressure, and available energy. If the answer is no, they stop behaving like long-term mining investments and instead try to salvage value by returning toward the factory. When possible, that means transferring their energy back into the factory rather than wandering until they are eventually lost to the scroll.
+
+This update mattered because it closed an important gap in the bot’s decision-making. A good strategy is not only about choosing when to commit, but also about recognizing when a commitment has failed and recovering as much value as possible. In that sense, the miner abort logic was less about mining itself and more about making the agent better at cutting losses before they become game-deciding ones.
+
+### 9. Factory Trade Filter
+
+A completely different kind of mistake showed up in the late-game factory routing. Sometimes the bot would choose a move that looked tactically reasonable in the moment, but actually led straight into a mutual factory collision that favored the opponent on the tiebreak. In the replay that exposed this, both factories died on the same turn, but the opponent still had one extra surviving unit. So the collision was not neutral at all. It was basically a losing trade dressed up as a dramatic ending.
+
+To address that, the factory decision layer was updated with a factory-trade filter. The bot now estimates the cells the enemy factory could also occupy on the next turn and compares the surviving non-factory unit counts on both sides. If the opponent has the tiebreak advantage, the factory becomes much more cautious about taking moves or jumps that would allow a mutual collision. When possible, it reroutes to a safer path instead of accepting what is effectively a losing exchange.
+
+This change reinforced another important principle from the project: tactical survival is not just about staying alive one more turn, but also about understanding what kind of endgame a move is creating. A factory trade can be fine when the tiebreak is favorable, but it becomes a blunder when the opponent is the side that benefits from both factories disappearing.
+
+### 10. Stale Miner Recovery
+
+As the competition went on, it became clear that even with stricter miner production and abort rules, a miner could still fail in a quieter way. It might never transform, never return its energy, and still sit in roughly the same area long enough to become a slow economic drain on the factory. In those cases, the bot was technically "aware" that the miner plan was getting worse, but it was still reacting too late to actually save the value.
+
+To address that, the miner logic was extended with lightweight persistent memory. Miners now keep track of whether they are actually making positional progress over time. If a miner remains effectively stuck for too many turns without converting into a mine, that state is treated as a failed investment rather than a normal temporary delay. The miner then shifts into a more aggressive recovery mode, preferring to route back toward the factory and salvage its energy instead of continuing to behave like a long-term mining attempt.
+
+This update matters because it adds an additional layer of realism to the bot’s economic reasoning. A strong strategy is not only about identifying good opportunities and abandoning obviously bad ones; it is also about recognizing when a plan has become quietly unproductive before the factory pays too high a price for waiting. In that sense, stale miner recovery made the bot better at treating time itself as part of the cost of a commitment.
+
+### 11. Prospecting Scout and Energy Return
+
+As stronger opponents started showing more reliable mine economies, it became pretty obvious that the bot was sometimes losing before any miner decision even happened. In those games, the real problem was informational and structural. Without an early way to discover promising nodes, the bot could stay blind for too long, miss the best mining opportunities, and fall behind against agents that were better at turning early map knowledge into long-term energy growth.
+
+To address that, the agent was updated with a more deliberate prospecting layer. In strong no-mine openings, the factory can now allow a single early scout whose job is not just generic exploration, but specifically to help expose meaningful opportunities the rest of the economy can act on. At the same time, worker behavior was adjusted so that accumulated energy is more likely to be transferred back into the factory instead of remaining stranded in support units that are no longer central to the game plan.
+
+This change mattered because it connected information gathering and energy management more directly. A mine economy is not only about building miners at the right moment; it also depends on seeing those moments early enough and making sure intermediate units return value rather than merely consuming it. In that sense, the prospecting scout and energy-return update helped the bot move a little closer to the kind of information-to-economy loop that stronger leaderboard agents were already using effectively.
+
+### 12. Mine Harvestability Filter
+
+As the bot got better at actually reaching and transforming mining nodes, another weakness surfaced: not every successful mine was really a good mine. In several games, the agent created mines that looked great on paper because they filled up with energy, but in practice that value was stranded too far behind the live part of the game. The factory never turned that stored energy into a meaningful late-game advantage before the scroll removed the chance.
+
+To address that, mine creation was made more selective and more tightly connected to collection behavior. The bot now treats a mine as worthwhile only when there is a realistic plan to harvest it with the factory or nearby support units before it turns into dead storage. Workers and scouts were also updated to recognize rich friendly mines as active energy targets, so that filled mines are more likely to be cashed out instead of simply admired from a distance.
+
+This update mattered because it sharpened the difference between nominal value and usable value. A full mine is only an advantage if the bot can actually turn that stored energy back into factory survival or future production. By filtering out low-harvest mines and improving follow-through on rich ones, the agent moved closer to a more complete mine-to-factory economy loop.
+
+### 13. Build Pressure Control
+
+As the competition continued, another pattern became hard to ignore. Even when parts of the economy were working, the factory could still keep producing support units after the board was already cluttered with stranded or low-value pieces. In those games, the issue was not always the first build decision. It was the cumulative pressure of continuing to spend after earlier units had already stopped contributing enough to justify more production.
+
+To address that, the factory production rules were tightened around board state rather than only raw energy thresholds. The bot now pays more attention to whether existing workers and scouts are still active, whether too many stranded support units are already on the board, and whether mine value is already present and should be protected instead of diluted by further spawning. In practice, that means production slows down much more aggressively once the support layer starts looking like deadweight.
+
+This update mattered because it moved the bot closer to a more disciplined economy. A strong agent does not just need good unit logic; it also needs to know when to stop adding new pieces and preserve the value it has already created. Build pressure control was meant to make the factory less eager to turn a temporary advantage into a slow late-game liability.
+
 ## Current Status
 
 The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, A*-based path planning on discovered terrain, and differentiated behavior across scouts, workers, miners, and the factory. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.
+
+## Copyright
+
+Copyright (c) 2026 `wuisabel-gif`. All rights reserved.
