@@ -254,4 +254,132 @@ def agent(obs, config):
                         best_score = score
         return best
 
-    
+    def bfs_first_action(start, goals, avoid, depth, init_jump_cd):
+        """Search both movement and optional factory jumps."""
+        if not goals:
+            return None
+        goal_set = set(goals)
+        queue = deque([(start[0], start[1], 0, None, init_jump_cd)])
+        visited = {(start[0], start[1], init_jump_cd)}
+
+        while queue:
+            col, row, dist, first_action, jump_cd = queue.popleft()
+            if (col, row) in goal_set and dist > 0:
+                return first_action
+            if dist >= depth:
+                continue
+
+            for direction in DIRS:
+                if not can_move(col, row, direction):
+                    continue
+                next_col, next_row = next_pos(col, row, direction)
+                if (next_col, next_row) in avoid:
+                    continue
+                next_jump_cd = max(0, jump_cd - 1)
+                state = (next_col, next_row, next_jump_cd)
+                if state in visited:
+                    continue
+                visited.add(state)
+                queue.append((next_col, next_row, dist + 1, first_action or direction, next_jump_cd))
+
+            if jump_cd == 0:
+                for direction in DIRS:
+                    if not can_jump(col, row, direction):
+                        continue
+                    dc, dr = OFFSETS[direction]
+                    next_col = col + 2 * dc
+                    next_row = row + 2 * dr
+                    if (next_col, next_row) in avoid:
+                        continue
+                    state = (next_col, next_row, config.factoryJumpCooldown)
+                    if state in visited:
+                        continue
+                    visited.add(state)
+                    queue.append(
+                        (
+                            next_col,
+                            next_row,
+                            dist + 1,
+                            first_action or f"JUMP_{direction}",
+                            config.factoryJumpCooldown,
+                        )
+                    )
+        return None
+
+    def bfs_move_only(start, goals, avoid, depth):
+        if not goals:
+            return None
+        goal_set = set(goals)
+        queue = deque([(start, None, 0)])
+        visited = {start}
+
+        while queue:
+            pos, first_action, dist = queue.popleft()
+            if pos in goal_set and dist > 0:
+                return first_action
+            if dist >= depth:
+                continue
+
+            for direction in ("NORTH", "EAST", "WEST"):
+                if not can_move(pos[0], pos[1], direction):
+                    continue
+                nxt = next_pos(pos[0], pos[1], direction)
+                if nxt in avoid or nxt in visited:
+                    continue
+                visited.add(nxt)
+                queue.append((nxt, first_action or direction, dist + 1))
+
+        return None
+
+    def bfs_factory_safe(start, goals, avoid, depth, init_jump_cd, allow_south):
+        if not goals:
+            return None
+        goal_set = set(goals)
+        directions = DIRS if allow_south else ("NORTH", "EAST", "WEST")
+        queue = deque([(start[0], start[1], 0, None, init_jump_cd)])
+        visited = {(start[0], start[1], init_jump_cd)}
+
+        while queue:
+            col, row, dist, first_action, jump_cd = queue.popleft()
+            if (col, row) in goal_set and dist > 0:
+                return first_action
+            if dist >= depth:
+                continue
+
+            for direction in directions:
+                if not can_move(col, row, direction):
+                    continue
+                next_col, next_row = next_pos(col, row, direction)
+                if (next_col, next_row) in avoid:
+                    continue
+                next_jump_cd = max(0, jump_cd - 1)
+                state = (next_col, next_row, next_jump_cd)
+                if state in visited:
+                    continue
+                visited.add(state)
+                queue.append((next_col, next_row, dist + 1, first_action or direction, next_jump_cd))
+
+            if jump_cd == 0:
+                for direction in DIRS:
+                    if not can_jump(col, row, direction):
+                        continue
+                    dc, dr = OFFSETS[direction]
+                    next_col = col + 2 * dc
+                    next_row = row + 2 * dr
+                    if (next_col, next_row) in avoid:
+                        continue
+                    state = (next_col, next_row, config.factoryJumpCooldown)
+                    if state in visited:
+                        continue
+                    visited.add(state)
+                    queue.append(
+                        (
+                            next_col,
+                            next_row,
+                            dist + 1,
+                            first_action or f"JUMP_{direction}",
+                            config.factoryJumpCooldown,
+                        )
+                    )
+
+        return None
