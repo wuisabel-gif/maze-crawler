@@ -138,3 +138,120 @@ def agent(obs, config):
                 best = cell
                 best_score = score
         return best
+
+    def nearby_open_nodes(origin, limit):
+        return [
+            cell for cell in KNOWN_MINING_NODES
+            if cell not in remembered_mines and manhattan(origin, cell) <= limit
+        ]
+
+    def nearby_visible_nodes(origin, limit):
+        return [
+            cell for cell in visible_nodes
+            if cell not in remembered_mines and manhattan(origin, cell) <= limit
+        ]
+
+    def nearby_visible_crystals(origin, limit):
+        return [
+            cell for cell, value in visible_crystal_map.items()
+            if value >= 18 and manhattan(origin, cell) <= limit
+        ]
+
+    def node_viable_for_miner(origin, node, energy):
+        if node is None or node in remembered_mines:
+            return False
+        distance = manhattan(origin, node)
+        if distance > 14:
+            return False
+        if node[1] - south <= 4:
+            return False
+        if energy < config.transformCost + 20 and distance > 6:
+            return False
+        return True
+
+    def best_friendly_mine(origin, max_distance=12, min_energy=150):
+        best = None
+        best_score = None
+        for cell, value in remembered_mines.items():
+            if len(value) < 3 or value[2] != obs.player:
+                continue
+            mine_energy = value[0]
+            if mine_energy < min_energy:
+                continue
+            distance = manhattan(origin, cell)
+            if distance > max_distance:
+                continue
+            score = distance - (mine_energy / 250.0)
+            if best is None or score < best_score:
+                best = cell
+                best_score = score
+        return best
+
+    def mine_collectors_available(cell):
+        if factory_pos is not None and manhattan(factory_pos, cell) <= 12:
+            return True
+        for uid in workers + scouts:
+            if manhattan((my_robots[uid][1], my_robots[uid][2]), cell) <= 10:
+                return True
+        return False
+
+    def best_harvestable_mine(origin, max_distance=14, min_energy=180):
+        best = None
+        best_score = None
+        for cell, value in remembered_mines.items():
+            if len(value) < 3 or value[2] != obs.player:
+                continue
+            if cell[1] - south <= 8:
+                continue
+            mine_energy = value[0]
+            if mine_energy < min_energy or not mine_collectors_available(cell):
+                continue
+            distance = manhattan(origin, cell)
+            if distance > max_distance:
+                continue
+            score = distance - (mine_energy / 220.0)
+            if best is None or score < best_score:
+                best = cell
+                best_score = score
+        return best
+
+    def mine_factory_cashout_target():
+        if factory_pos is None:
+            return None
+        return best_harvestable_mine(factory_pos, 12, 220)
+
+    def mine_harvest_viable(node_cell):
+        if factory_pos is None:
+            return False
+        if node_cell[1] - south <= 10:
+            return False
+        collector_distance = min(
+            [manhattan(factory_pos, node_cell)] +
+            [manhattan((my_robots[uid][1], my_robots[uid][2]), node_cell) for uid in workers + scouts]
+        )
+        return collector_distance <= 12
+
+    def can_transfer_to_factory(col, row, energy, threshold):
+        if factory_pos is None or energy < threshold:
+            return None
+        if manhattan((col, row), factory_pos) != 1:
+            return None
+        for direction in DIRS:
+            if next_pos(col, row, direction) == factory_pos and can_move(col, row, direction):
+                return f"TRANSFER_{direction}"
+        return None
+
+    def best_frontier(origin):
+        best = None
+        best_score = None
+        for row in range(south, north + 1):
+            for col in range(width):
+                idx = (row - south) * width + col
+                if idx >= len(obs.walls) or obs.walls[idx] == -1:
+                    score = manhattan(origin, (col, row)) - (row * 0.15)
+                    if best is None or score < best_score:
+                        best = (col, row)
+                        best_score = score
+        return best
+
+    
