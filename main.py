@@ -421,7 +421,17 @@ def agent(obs, config):
                     reachable.add((col + 2 * dc, row + 2 * dr))
         return reachable
 
-   
+    def move_cooldown(data):
+        return data[5] if len(data) > 5 else 0
+
+    def jump_cooldown(data):
+        return data[6] if len(data) > 6 else 0
+
+    def build_cooldown(data):
+        return data[7] if len(data) > 7 else 0
+
+    def out_of_time():
+        return time.time() - started > 2.6
 
     units = sorted(my_robots.items(), key=lambda item: (item[1][0], item[0]))
     factory_item = next(((uid, data) for uid, data in units if data[0] == FACTORY), (None, None))
@@ -477,7 +487,10 @@ def agent(obs, config):
         for uid in workers + scouts + miners
         if my_robots[uid][2] >= south
     }
-    
+    our_support_count = sum(1 for uid in workers + scouts + miners if my_robots[uid][2] >= south)
+    our_support_energy = sum(my_robots[uid][3] for uid in workers + scouts + miners if my_robots[uid][2] >= south)
+    enemy_support_count = sum(1 for data in enemy_robots.values() if data[0] != FACTORY and data[2] >= south)
+    enemy_support_energy = sum(data[3] for data in enemy_robots.values() if data[0] != FACTORY and data[2] >= south)
 
     factory_pos = None
 
@@ -585,7 +598,105 @@ def agent(obs, config):
                 and not cashout_mode
                 and fe >= 1000
             )
-            
+            max_workers = 2 if allow_second_worker else 1
+            prospect_scout_ok = (
+                (no_mine_plan or opening_phase)
+                and not active_scouts
+                and not active_workers
+                and not miners
+                and stranded_supports == 0
+                and not late_phase
+                and fe >= max(700 if opening_phase else 900, scout_reserve + (200 if opening_phase else 350))
+                and (south == 0 or danger_gap >= 8)
+            )
+            followup_scout_ok = (
+                opening_phase
+                and not active_scouts
+                and not miners
+                and len(active_workers) <= 1
+                and stranded_supports == 0
+                and not urgent_visible_nodes
+                and fe >= max(650, scout_reserve + 120)
+            )
+            scout_floor = scout_reserve + (250 if no_mine_plan else 150)
+            scout_room_ok = (
+                stranded_supports == 0
+                and danger_gap >= 10
+                and fe >= scout_floor
+            )
+            mine_room_ok = (south == 0 or danger_gap >= 8) and fe >= max(460, config.minerCost + 160)
+            late_miner_ok = south < 22 or (fe >= 850 and danger_gap >= 16) or danger_gap >= 22
+            build_pressure_ok = (
+                stranded_supports == 0
+                and (not friendly_mines or fe >= 1200)
+                and (not mine_mode or fe >= 700)
+                and (not late_phase or fe >= 950)
+                and (not cashout_mode or fe >= 1050)
+            )
+            scout_mine_followup_ok = (
+                build_pressure_ok
+                and close_nodes
+                and not friendly_mines
+                and not cashout_mode
+                and len(miners) < 1
+                and (len(active_workers) + len(active_scouts)) >= 1
+                and fe >= max(500, config.minerCost + 180)
+                and (opening_phase or danger_gap >= 10)
+                and late_miner_ok
+            )
+            spawn_blocked = spawn_cell in occupied_now
+            if not spawn_blocked:
+                if (
+                    build_pressure_ok
+                    and
+                    urgent_visible_nodes
+                    and not friendly_mines
+                    and not cashout_mode
+                    and len(miners) < 1
+                    and mine_room_ok
+                    and late_miner_ok
+                ):
+                    factory_action = "BUILD_MINER"
+                elif prospect_scout_ok:
+                    factory_action = "BUILD_SCOUT"
+                elif followup_scout_ok:
+                    factory_action = "BUILD_SCOUT"
+                elif (
+                    build_pressure_ok
+                    and len(active_workers) < max_workers
+                    and not cashout_mode
+                    and (not opening_phase or opening_worker_job or len(active_workers) > 0 or len(active_miners) > 0)
+                    and (not friendly_mines or (len(active_workers) == 0 and fe >= 1300))
+                    and fe >= worker_reserve
+                ):
+                    factory_action = "BUILD_WORKER"
+                elif scout_mine_followup_ok:
+                    factory_action = "BUILD_MINER"
+                elif (
+                    build_pressure_ok
+                    and
+                    not friendly_mines
+                    and
+                    not no_mine_plan
+                    and not cashout_mode
+                    and len(active_scouts) < 1
+                    and len(active_workers) <= 1
+                    and scout_room_ok
+                ):
+                    factory_action = "BUILD_SCOUT"
+                elif (
+                    build_pressure_ok
+                    and
+                    not friendly_mines
+                    and
+                    not no_mine_plan
+                    and not cashout_mode
+                    and len(active_scouts) < 1
+                    and len(active_workers) >= 1
+                    and scout_room_ok
+                    and fe >= scout_reserve + 250
+                ):
+                    factory_action = "BUILD_SCOUT"
 
         if factory_action is not None and not factory_action.startswith("BUILD_"):
             destination = action_destination(fc, fr, factory_action)
