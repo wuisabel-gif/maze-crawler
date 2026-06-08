@@ -77,4 +77,64 @@ def agent(obs, config):
     def get_walls(col, row):
         """Return wall bitmask, using east-west symmetry when unseen."""
         idx = (row - south) * width + col
-        
+        if 0 <= col < width and 0 <= idx < len(obs.walls) and obs.walls[idx] != -1:
+            return obs.walls[idx]
+
+        mirrored_col = width - 1 - col
+        mirrored_idx = (row - south) * width + mirrored_col
+        if 0 <= mirrored_col < width and 0 <= mirrored_idx < len(obs.walls) and obs.walls[mirrored_idx] != -1:
+            value = obs.walls[mirrored_idx]
+            mirrored = value & 5
+            if value & 2:
+                mirrored |= 8
+            if value & 8:
+                mirrored |= 2
+            return mirrored
+        return 0
+
+    def can_move(col, row, direction):
+        dc, dr = OFFSETS[direction]
+        next_col = col + dc
+        next_row = row + dr
+        if not (0 <= next_col < width and south <= next_row <= north):
+            return False
+        return not (get_walls(col, row) & WALL_BITS[direction])
+
+    def can_jump(col, row, direction):
+        dc, dr = OFFSETS[direction]
+        next_col = col + 2 * dc
+        next_row = row + 2 * dr
+        if not (0 <= next_col < width and south <= next_row <= north):
+            return False
+        return get_walls(next_col, next_row) != 15
+
+    def next_pos(col, row, direction):
+        dc, dr = OFFSETS[direction]
+        return col + dc, row + dr
+
+    def manhattan(a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def best_crystal(origin):
+        best = None
+        best_score = None
+        for cell, value in visible_crystal_map.items():
+            score = manhattan(origin, cell) - (value / 18.0)
+            if cell in claimed_targets:
+                score += 4
+            if best is None or score < best_score:
+                best = cell
+                best_score = score
+        return best
+
+    def best_node(origin):
+        best = None
+        best_score = None
+        for cell in KNOWN_MINING_NODES:
+            score = manhattan(origin, cell)
+            if cell in claimed_targets:
+                score += 6
+            if best is None or score < best_score:
+                best = cell
+                best_score = score
+        return best
