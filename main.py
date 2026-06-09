@@ -36,10 +36,11 @@ def agent(obs, config):
     north = obs.northBound
     scout_reserve = max(200, config.scoutCost + 150)
     worker_reserve = max(400, config.workerCost + 200)
-    miner_reserve = max(550, config.minerCost + 250)
 
     my_robots = {uid: data for uid, data in obs.robots.items() if data[4] == obs.player}
-    enemy_robots = {uid: data for uid, data in obs.robots.items() if data[4] != obs.player}
+    enemy_robots = {
+        uid: data for uid, data in obs.robots.items() if data[4] != obs.player
+    }
     enemy_player = 1 - obs.player
     MINER_MEMORY_KEYS = set(my_robots)
     for stale_uid in list(MINER_MEMORY):
@@ -51,25 +52,26 @@ def agent(obs, config):
     claimed_targets = set()
 
     visible_crystal_map = {
-        parse_coord(key): value
-        for key, value in obs.crystals.items()
-        if value > 0
+        parse_coord(key): value for key, value in obs.crystals.items() if value > 0
     }
     visible_nodes = {parse_coord(key) for key in obs.miningNodes}
     remembered_mines = {parse_coord(key): value for key, value in obs.mines.items()}
     friendly_mines = {
-        cell for cell, value in remembered_mines.items()
+        cell
+        for cell, value in remembered_mines.items()
         if len(value) >= 3 and value[2] == obs.player
     }
     friendly_mine_energy = sum(
-        value[0] for value in remembered_mines.values()
+        value[0]
+        for value in remembered_mines.values()
         if len(value) >= 3 and value[2] == obs.player
     )
 
     KNOWN_MINING_NODES.update(visible_nodes)
     KNOWN_MINING_NODES.difference_update(
         {
-            cell for cell in KNOWN_MINING_NODES
+            cell
+            for cell in KNOWN_MINING_NODES
             if cell[1] < south or cell[1] > north or cell in remembered_mines
         }
     )
@@ -82,7 +84,11 @@ def agent(obs, config):
 
         mirrored_col = width - 1 - col
         mirrored_idx = (row - south) * width + mirrored_col
-        if 0 <= mirrored_col < width and 0 <= mirrored_idx < len(obs.walls) and obs.walls[mirrored_idx] != -1:
+        if (
+            0 <= mirrored_col < width
+            and 0 <= mirrored_idx < len(obs.walls)
+            and obs.walls[mirrored_idx] != -1
+        ):
             value = obs.walls[mirrored_idx]
             mirrored = value & 5
             if value & 2:
@@ -141,19 +147,22 @@ def agent(obs, config):
 
     def nearby_open_nodes(origin, limit):
         return [
-            cell for cell in KNOWN_MINING_NODES
+            cell
+            for cell in KNOWN_MINING_NODES
             if cell not in remembered_mines and manhattan(origin, cell) <= limit
         ]
 
     def nearby_visible_nodes(origin, limit):
         return [
-            cell for cell in visible_nodes
+            cell
+            for cell in visible_nodes
             if cell not in remembered_mines and manhattan(origin, cell) <= limit
         ]
 
     def nearby_visible_crystals(origin, limit):
         return [
-            cell for cell, value in visible_crystal_map.items()
+            cell
+            for cell, value in visible_crystal_map.items()
             if value >= 18 and manhattan(origin, cell) <= limit
         ]
 
@@ -226,8 +235,11 @@ def agent(obs, config):
         if node_cell[1] - south <= 10:
             return False
         collector_distance = min(
-            [manhattan(factory_pos, node_cell)] +
-            [manhattan((my_robots[uid][1], my_robots[uid][2]), node_cell) for uid in workers + scouts]
+            [manhattan(factory_pos, node_cell)]
+            + [
+                manhattan((my_robots[uid][1], my_robots[uid][2]), node_cell)
+                for uid in workers + scouts
+            ]
         )
         return collector_distance <= 12
 
@@ -237,7 +249,9 @@ def agent(obs, config):
         if manhattan((col, row), factory_pos) != 1:
             return None
         for direction in DIRS:
-            if next_pos(col, row, direction) == factory_pos and can_move(col, row, direction):
+            if next_pos(col, row, direction) == factory_pos and can_move(
+                col, row, direction
+            ):
                 return f"TRANSFER_{direction}"
         return None
 
@@ -280,7 +294,15 @@ def agent(obs, config):
                 if state in visited:
                     continue
                 visited.add(state)
-                queue.append((next_col, next_row, dist + 1, first_action or direction, next_jump_cd))
+                queue.append(
+                    (
+                        next_col,
+                        next_row,
+                        dist + 1,
+                        first_action or direction,
+                        next_jump_cd,
+                    )
+                )
 
             if jump_cd == 0:
                 for direction in DIRS:
@@ -357,7 +379,15 @@ def agent(obs, config):
                 if state in visited:
                     continue
                 visited.add(state)
-                queue.append((next_col, next_row, dist + 1, first_action or direction, next_jump_cd))
+                queue.append(
+                    (
+                        next_col,
+                        next_row,
+                        dist + 1,
+                        first_action or direction,
+                        next_jump_cd,
+                    )
+                )
 
             if jump_cd == 0:
                 for direction in DIRS:
@@ -434,30 +464,27 @@ def agent(obs, config):
         return time.time() - started > 2.6
 
     units = sorted(my_robots.items(), key=lambda item: (item[1][0], item[0]))
-    factory_item = next(((uid, data) for uid, data in units if data[0] == FACTORY), (None, None))
+    factory_item = next(
+        ((uid, data) for uid, data in units if data[0] == FACTORY), (None, None)
+    )
     factory_uid, factory_data = factory_item
     workers = [uid for uid, data in units if data[0] == WORKER]
     scouts = [uid for uid, data in units if data[0] == SCOUT]
     miners = [uid for uid, data in units if data[0] == MINER]
     active_miners = [
-        uid for uid in miners
-        if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
+        uid for uid in miners if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
     ]
     active_workers = [
-        uid for uid in workers
-        if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
+        uid for uid in workers if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
     ]
     active_scouts = [
-        uid for uid in scouts
-        if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
+        uid for uid in scouts if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
     ]
     stranded_workers = [
-        uid for uid in workers
-        if my_robots[uid][3] == 0 and my_robots[uid][2] >= south
+        uid for uid in workers if my_robots[uid][3] == 0 and my_robots[uid][2] >= south
     ]
     stranded_scouts = [
-        uid for uid in scouts
-        if my_robots[uid][3] == 0 and my_robots[uid][2] >= south
+        uid for uid in scouts if my_robots[uid][3] == 0 and my_robots[uid][2] >= south
     ]
     stranded_supports = len(stranded_workers) + len(stranded_scouts)
     late_phase = south >= 35
@@ -469,9 +496,14 @@ def agent(obs, config):
         and cell[1] - south > 8
         and mine_collectors_available(cell)
     )
-    enemy_factory_data = next((data for data in enemy_robots.values() if data[0] == FACTORY), None)
+    enemy_factory_data = next(
+        (data for data in enemy_robots.values() if data[0] == FACTORY), None
+    )
     if enemy_factory_data is not None:
-        ENEMY_FACTORY_MEMORY[enemy_player] = (enemy_factory_data[1], enemy_factory_data[2])
+        ENEMY_FACTORY_MEMORY[enemy_player] = (
+            enemy_factory_data[1],
+            enemy_factory_data[2],
+        )
     remembered_enemy_factory_pos = ENEMY_FACTORY_MEMORY.get(enemy_player)
     enemy_factory_cells = enemy_factory_reach(enemy_factory_data)
     if not enemy_factory_cells and remembered_enemy_factory_pos is not None:
@@ -487,10 +519,22 @@ def agent(obs, config):
         for uid in workers + scouts + miners
         if my_robots[uid][2] >= south
     }
-    our_support_count = sum(1 for uid in workers + scouts + miners if my_robots[uid][2] >= south)
-    our_support_energy = sum(my_robots[uid][3] for uid in workers + scouts + miners if my_robots[uid][2] >= south)
-    enemy_support_count = sum(1 for data in enemy_robots.values() if data[0] != FACTORY and data[2] >= south)
-    enemy_support_energy = sum(data[3] for data in enemy_robots.values() if data[0] != FACTORY and data[2] >= south)
+    our_support_count = sum(
+        1 for uid in workers + scouts + miners if my_robots[uid][2] >= south
+    )
+    our_support_energy = sum(
+        my_robots[uid][3]
+        for uid in workers + scouts + miners
+        if my_robots[uid][2] >= south
+    )
+    enemy_support_count = sum(
+        1 for data in enemy_robots.values() if data[0] != FACTORY and data[2] >= south
+    )
+    enemy_support_energy = sum(
+        data[3]
+        for data in enemy_robots.values()
+        if data[0] != FACTORY and data[2] >= south
+    )
 
     factory_pos = None
 
@@ -505,11 +549,7 @@ def agent(obs, config):
         danger_gap = fr - south
         in_danger = south > 0 and danger_gap <= 4
         forbid_south = danger_gap <= 6
-        allow_worker_feed = (
-            not in_danger
-            and factory_build_cd > 0
-            and fe >= 650
-        )
+        allow_worker_feed = not in_danger and factory_build_cd > 0 and fe >= 650
 
         if allow_worker_feed:
             for worker_uid in workers:
@@ -521,7 +561,10 @@ def agent(obs, config):
                 if fe - worker[3] < worker_reserve:
                     continue
                 for direction in DIRS:
-                    if next_pos(fc, fr, direction) == (worker[1], worker[2]) and can_move(fc, fr, direction):
+                    if next_pos(fc, fr, direction) == (
+                        worker[1],
+                        worker[2],
+                    ) and can_move(fc, fr, direction):
                         factory_action = f"TRANSFER_{direction}"
                         break
                 if factory_action:
@@ -541,7 +584,14 @@ def agent(obs, config):
             urgent_avoid = enemy_positions | reserved
             step = bfs_move_only(factory_pos, urgent_goals, urgent_avoid, 20)
             if step is None:
-                step = bfs_factory_safe(factory_pos, urgent_goals, enemy_positions, 20, factory_jump_cd, False)
+                step = bfs_factory_safe(
+                    factory_pos,
+                    urgent_goals,
+                    enemy_positions,
+                    20,
+                    factory_jump_cd,
+                    False,
+                )
             if step is not None:
                 factory_action = step
 
@@ -566,10 +616,27 @@ def agent(obs, config):
 
         if factory_action is None and factory_move_cd <= 1:
             long_goals = [(col, min(north, fr + 25)) for col in range(width)]
-            polite_avoid = enemy_positions | {(my_robots[uid][1], my_robots[uid][2]) for uid in workers + scouts + miners}
-            step = bfs_factory_safe(factory_pos, long_goals, polite_avoid, 40, factory_jump_cd, not forbid_south)
+            polite_avoid = enemy_positions | {
+                (my_robots[uid][1], my_robots[uid][2])
+                for uid in workers + scouts + miners
+            }
+            step = bfs_factory_safe(
+                factory_pos,
+                long_goals,
+                polite_avoid,
+                40,
+                factory_jump_cd,
+                not forbid_south,
+            )
             if step is None:
-                step = bfs_factory_safe(factory_pos, long_goals, enemy_positions, 40, factory_jump_cd, not forbid_south)
+                step = bfs_factory_safe(
+                    factory_pos,
+                    long_goals,
+                    enemy_positions,
+                    40,
+                    factory_jump_cd,
+                    not forbid_south,
+                )
             if step is not None:
                 factory_action = step
 
@@ -579,16 +646,19 @@ def agent(obs, config):
             and factory_build_cd == 0
             and not (get_walls(fc, fr) & WALL_BITS["NORTH"])
         ):
-            open_nodes = [cell for cell in KNOWN_MINING_NODES if cell not in remembered_mines]
+            open_nodes = [
+                cell for cell in KNOWN_MINING_NODES if cell not in remembered_mines
+            ]
             close_nodes = nearby_open_nodes(factory_pos, 12)
-            close_visible_nodes = nearby_visible_nodes(factory_pos, 8)
             urgent_visible_nodes = nearby_visible_nodes(factory_pos, 5)
             close_crystals = nearby_visible_crystals(factory_pos, 4)
             no_mine_plan = not open_nodes
             mine_mode = bool(friendly_mines or active_miners)
             cashout_mode = harvestable_mine_energy >= 250
             opening_phase = south <= 3 and fr <= 10
-            opening_worker_job = bool(close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"]))
+            opening_worker_job = bool(
+                close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"])
+            )
             allow_second_worker = (
                 opening_worker_job
                 and not no_mine_plan
@@ -606,7 +676,11 @@ def agent(obs, config):
                 and not miners
                 and stranded_supports == 0
                 and not late_phase
-                and fe >= max(700 if opening_phase else 900, scout_reserve + (200 if opening_phase else 350))
+                and fe
+                >= max(
+                    700 if opening_phase else 900,
+                    scout_reserve + (200 if opening_phase else 350),
+                )
                 and (south == 0 or danger_gap >= 8)
             )
             followup_scout_ok = (
@@ -620,12 +694,14 @@ def agent(obs, config):
             )
             scout_floor = scout_reserve + (250 if no_mine_plan else 150)
             scout_room_ok = (
-                stranded_supports == 0
-                and danger_gap >= 10
-                and fe >= scout_floor
+                stranded_supports == 0 and danger_gap >= 10 and fe >= scout_floor
             )
-            mine_room_ok = (south == 0 or danger_gap >= 8) and fe >= max(460, config.minerCost + 160)
-            late_miner_ok = south < 22 or (fe >= 850 and danger_gap >= 16) or danger_gap >= 22
+            mine_room_ok = (south == 0 or danger_gap >= 8) and fe >= max(
+                460, config.minerCost + 160
+            )
+            late_miner_ok = (
+                south < 22 or (fe >= 850 and danger_gap >= 16) or danger_gap >= 22
+            )
             build_pressure_ok = (
                 stranded_supports == 0
                 and (not friendly_mines or fe >= 1200)
@@ -648,8 +724,7 @@ def agent(obs, config):
             if not spawn_blocked:
                 if (
                     build_pressure_ok
-                    and
-                    urgent_visible_nodes
+                    and urgent_visible_nodes
                     and not friendly_mines
                     and not cashout_mode
                     and len(miners) < 1
@@ -665,8 +740,15 @@ def agent(obs, config):
                     build_pressure_ok
                     and len(active_workers) < max_workers
                     and not cashout_mode
-                    and (not opening_phase or opening_worker_job or len(active_workers) > 0 or len(active_miners) > 0)
-                    and (not friendly_mines or (len(active_workers) == 0 and fe >= 1300))
+                    and (
+                        not opening_phase
+                        or opening_worker_job
+                        or len(active_workers) > 0
+                        or len(active_miners) > 0
+                    )
+                    and (
+                        not friendly_mines or (len(active_workers) == 0 and fe >= 1300)
+                    )
                     and fe >= worker_reserve
                 ):
                     factory_action = "BUILD_WORKER"
@@ -674,10 +756,8 @@ def agent(obs, config):
                     factory_action = "BUILD_MINER"
                 elif (
                     build_pressure_ok
-                    and
-                    not friendly_mines
-                    and
-                    not no_mine_plan
+                    and not friendly_mines
+                    and not no_mine_plan
                     and not cashout_mode
                     and len(active_scouts) < 1
                     and len(active_workers) <= 1
@@ -686,10 +766,8 @@ def agent(obs, config):
                     factory_action = "BUILD_SCOUT"
                 elif (
                     build_pressure_ok
-                    and
-                    not friendly_mines
-                    and
-                    not no_mine_plan
+                    and not friendly_mines
+                    and not no_mine_plan
                     and not cashout_mode
                     and len(active_scouts) < 1
                     and len(active_workers) >= 1
@@ -704,7 +782,12 @@ def agent(obs, config):
                 safer_action = None
                 if in_danger and factory_move_cd <= 1:
                     urgent_goals = [(col, min(north, fr + 8)) for col in range(width)]
-                    safer_action = bfs_move_only(factory_pos, urgent_goals, enemy_positions | reserved | friendly_support_positions, 20)
+                    safer_action = bfs_move_only(
+                        factory_pos,
+                        urgent_goals,
+                        enemy_positions | reserved | friendly_support_positions,
+                        20,
+                    )
                     if safer_action is None:
                         safer_action = bfs_factory_safe(
                             factory_pos,
@@ -724,7 +807,11 @@ def agent(obs, config):
                         factory_jump_cd,
                         not forbid_south,
                     )
-                if safer_action is not None and action_destination(fc, fr, safer_action) not in friendly_support_positions:
+                if (
+                    safer_action is not None
+                    and action_destination(fc, fr, safer_action)
+                    not in friendly_support_positions
+                ):
                     factory_action = safer_action
                 else:
                     factory_action = "IDLE"
@@ -739,14 +826,20 @@ def agent(obs, config):
                     and enemy_support_energy > our_support_energy
                 )
             )
-            and manhattan(factory_pos, (enemy_factory_data[1], enemy_factory_data[2])) <= 4
+            and manhattan(factory_pos, (enemy_factory_data[1], enemy_factory_data[2]))
+            <= 4
         ):
             destination = action_destination(fc, fr, factory_action)
             if destination in enemy_factory_cells:
                 safer_action = None
                 if in_danger and factory_move_cd <= 1:
                     urgent_goals = [(col, min(north, fr + 8)) for col in range(width)]
-                    safer_action = bfs_move_only(factory_pos, urgent_goals, enemy_positions | reserved | enemy_factory_cells, 20)
+                    safer_action = bfs_move_only(
+                        factory_pos,
+                        urgent_goals,
+                        enemy_positions | reserved | enemy_factory_cells,
+                        20,
+                    )
                     if safer_action is None:
                         safer_action = bfs_factory_safe(
                             factory_pos,
@@ -758,9 +851,14 @@ def agent(obs, config):
                         )
                 elif factory_move_cd <= 1:
                     long_goals = [(col, min(north, fr + 25)) for col in range(width)]
-                    safer_avoid = enemy_positions | enemy_factory_cells | {
-                        (my_robots[uid][1], my_robots[uid][2]) for uid in workers + scouts + miners
-                    }
+                    safer_avoid = (
+                        enemy_positions
+                        | enemy_factory_cells
+                        | {
+                            (my_robots[uid][1], my_robots[uid][2])
+                            for uid in workers + scouts + miners
+                        }
+                    )
                     safer_action = bfs_factory_safe(
                         factory_pos,
                         long_goals,
@@ -769,7 +867,11 @@ def agent(obs, config):
                         factory_jump_cd,
                         not forbid_south,
                     )
-                if safer_action is not None and action_destination(fc, fr, safer_action) not in enemy_factory_cells:
+                if (
+                    safer_action is not None
+                    and action_destination(fc, fr, safer_action)
+                    not in enemy_factory_cells
+                ):
                     factory_action = safer_action
                 elif factory_action.startswith("BUILD_") or destination != factory_pos:
                     factory_action = "IDLE"
@@ -792,7 +894,9 @@ def agent(obs, config):
         if transfer_action is not None:
             worker_action = transfer_action
         elif mine_target is not None and we <= 180 and move_cooldown(worker) <= 1:
-            step = bfs_first_action((wc, wr), [mine_target], reserved | enemy_positions, 18, 999)
+            step = bfs_first_action(
+                (wc, wr), [mine_target], reserved | enemy_positions, 18, 999
+            )
             if step is not None:
                 worker_action = step
         elif (get_walls(wc, wr) & WALL_BITS["NORTH"]) and we >= config.wallRemoveCost:
@@ -804,7 +908,10 @@ def agent(obs, config):
                 goals = [target]
             else:
                 crystal_target = best_crystal((wc, wr))
-                if crystal_target is not None and manhattan((wc, wr), crystal_target) <= 10:
+                if (
+                    crystal_target is not None
+                    and manhattan((wc, wr), crystal_target) <= 10
+                ):
                     claimed_targets.add(crystal_target)
                     goals = [crystal_target]
                 elif factory_pos is not None:
@@ -812,11 +919,15 @@ def agent(obs, config):
                 else:
                     goals = [(wc, min(north, wr + 5))]
 
-            step = bfs_first_action((wc, wr), goals, reserved | enemy_positions, 25, 999)
+            step = bfs_first_action(
+                (wc, wr), goals, reserved | enemy_positions, 25, 999
+            )
             if step is None:
                 frontier = best_frontier((wc, wr))
                 if frontier is not None:
-                    step = bfs_first_action((wc, wr), [frontier], reserved | enemy_positions, 20, 999)
+                    step = bfs_first_action(
+                        (wc, wr), [frontier], reserved | enemy_positions, 20, 999
+                    )
             if step is not None:
                 worker_action = step
 
@@ -838,7 +949,11 @@ def agent(obs, config):
         node_target = best_node(miner_pos)
         viable_node = node_viable_for_miner(miner_pos, node_target, me)
         miner_stale = stale_turns >= 4
-        opening_stall = mr <= south + 10 and stale_turns >= 2 and not nearby_visible_nodes(miner_pos, 4)
+        opening_stall = (
+            mr <= south + 10
+            and stale_turns >= 2
+            and not nearby_visible_nodes(miner_pos, 4)
+        )
         opening_no_signal = (
             factory_pos is not None
             and mr <= south + 12
@@ -852,9 +967,17 @@ def agent(obs, config):
             or opening_stall
             or opening_no_signal
             or mr - south <= 6
-            or (factory_pos is not None and my_robots[factory_uid][3] <= 260 and me >= 120)
+            or (
+                factory_pos is not None
+                and my_robots[factory_uid][3] <= 260
+                and me >= 120
+            )
             or (friendly_mines and not nearby_visible_nodes(miner_pos, 6))
-            or (harvestable_mine_energy >= 400 and factory_pos is not None and my_robots[factory_uid][3] <= 500)
+            or (
+                harvestable_mine_energy >= 400
+                and factory_pos is not None
+                and my_robots[factory_uid][3] <= 500
+            )
         )
 
         if (
@@ -873,18 +996,26 @@ def agent(obs, config):
             and me >= 40
         ):
             for direction in DIRS:
-                if next_pos(mc, mr, direction) == factory_pos and can_move(mc, mr, direction):
+                if next_pos(mc, mr, direction) == factory_pos and can_move(
+                    mc, mr, direction
+                ):
                     miner_action = f"TRANSFER_{direction}"
                     break
         elif move_cooldown(miner) <= 1 and factory_pos is not None and mr - south > 4:
             if viable_node:
                 claimed_targets.add(node_target)
-                miner_action = bfs_first_action(miner_pos, [node_target], reserved | enemy_positions, 30, 999)
+                miner_action = bfs_first_action(
+                    miner_pos, [node_target], reserved | enemy_positions, 30, 999
+                )
             elif miner_abort and manhattan(miner_pos, factory_pos) <= 24:
-                miner_action = bfs_first_action(miner_pos, [factory_pos], reserved | enemy_positions, 24, 999)
+                miner_action = bfs_first_action(
+                    miner_pos, [factory_pos], reserved | enemy_positions, 24, 999
+                )
             if miner_action is None:
                 fallback = (factory_pos[0], min(north, factory_pos[1] + 6))
-                miner_action = bfs_first_action(miner_pos, [fallback], reserved | enemy_positions, 16, 999)
+                miner_action = bfs_first_action(
+                    miner_pos, [fallback], reserved | enemy_positions, 16, 999
+                )
 
         actions[miner_uid] = miner_action or "IDLE"
         reserve_action(mc, mr, actions[miner_uid])
@@ -899,9 +1030,15 @@ def agent(obs, config):
         scout_pos = (sc, sr)
         scout_action = None
 
-        if factory_pos is not None and manhattan(scout_pos, factory_pos) == 1 and se >= 50:
+        if (
+            factory_pos is not None
+            and manhattan(scout_pos, factory_pos) == 1
+            and se >= 50
+        ):
             for direction in DIRS:
-                if next_pos(sc, sr, direction) == factory_pos and can_move(sc, sr, direction):
+                if next_pos(sc, sr, direction) == factory_pos and can_move(
+                    sc, sr, direction
+                ):
                     scout_action = f"TRANSFER_{direction}"
                     break
 
@@ -914,7 +1051,10 @@ def agent(obs, config):
                 goals = [factory_pos]
             else:
                 crystal_target = best_crystal(scout_pos)
-                if crystal_target is not None and manhattan(scout_pos, crystal_target) <= 10:
+                if (
+                    crystal_target is not None
+                    and manhattan(scout_pos, crystal_target) <= 10
+                ):
                     claimed_targets.add(crystal_target)
                     goals = [crystal_target]
                 else:
@@ -923,7 +1063,9 @@ def agent(obs, config):
                         goals = [(col, min(north, sr + 12)) for col in range(width)]
 
             if goals:
-                scout_action = bfs_first_action(scout_pos, goals, reserved | enemy_positions, 30, 999)
+                scout_action = bfs_first_action(
+                    scout_pos, goals, reserved | enemy_positions, 30, 999
+                )
 
         actions[scout_uid] = scout_action or "IDLE"
         reserve_action(sc, sr, actions[scout_uid])

@@ -223,13 +223,39 @@ This update mattered because it sharpened the difference between nominal value a
 
 ![Rank 4 leaderboard milestone](assets/no-4.jpg)
 
-This update also came with another big leaderboard milestone. After tightening build pressure control, the bot moved up from rank `5` to rank `4`, with the score reaching about `1190.8`. That was especially satisfying because it showed that being more disciplined about when to stop building could matter just as much as adding new movement or mining logic.
+One of the nicest surprises in the project came from this round of production tuning. After tightening build pressure control, the bot moved up from rank `5` to rank `4`, with the score reaching about `1190.8`. That was especially satisfying because it showed that being more disciplined about when to stop building could matter just as much as adding new movement or mining logic.
 
 As the competition continued, another pattern became hard to ignore. Even when parts of the economy were working, the factory could still keep producing support units after the board was already cluttered with stranded or low-value pieces. In those games, the issue was not always the first build decision. It was the cumulative pressure of continuing to spend after earlier units had already stopped contributing enough to justify more production.
 
 To address that, the factory production rules were tightened around board state rather than only raw energy thresholds. The bot now pays more attention to whether existing workers and scouts are still active, whether too many stranded support units are already on the board, and whether mine value is already present and should be protected instead of diluted by further spawning. In practice, that means production slows down much more aggressively once the support layer starts looking like deadweight.
 
 This update mattered because it moved the bot closer to a more disciplined economy. A strong agent does not just need good unit logic; it also needs to know when to stop adding new pieces and preserve the value it has already created. Build pressure control was meant to make the factory less eager to turn a temporary advantage into a slow late-game liability.
+
+### 14. Opening Lane Safety and Scout Follow-Through
+
+As the competition kept going, one of the stranger replay bugs came from the opening itself. In one game, the bot actually made the "right" high-level choice by trying to start a miner line earlier, but then immediately undercut itself by stepping the factory into its own freshly spawned unit. In another set of games, the opening would still slide too easily into a worker-only pattern, which made it much harder to discover or commit to a useful early mine before stronger opponents had already pulled ahead.
+
+To address that, the opening logic was tightened in two ways. First, the factory now treats friendly support positions as real hazards and avoids moving or jumping into its own freshly spawned units whenever possible. Second, the opening build order became more flexible: a single early worker no longer blocks the bot from following up with a scout, and a scout-discovered node can now trigger a miner line more directly instead of forcing the whole economy through a worker-first sequence.
+
+This update mattered because it improved the part of the game where small mistakes are disproportionately expensive. Burning `300` energy on a self-crushed miner or drifting into a passive worker-only opening can decide the rest of the match before the midgame even starts. In that sense, this pass was about making the opening less brittle and more capable of turning early information into an actual economy plan.
+
+### 15. Late Miner Restraint and Better Endgame Cashout
+
+Another set of replays showed a different pattern: the bot could eventually create a strong mine, but only after the factory had already fallen too far behind on position for that late economy to really matter. In those games, the agent was sometimes too patient with opening miners that stalled near the starting area, and too willing to open fresh miner lines late even when the scroll pressure meant the payoff would come after the most important movement race had already been lost.
+
+To address that, the miner policy was tightened again. Opening miners now give up sooner if they stall near the spawn area without finding a credible nearby node, and late miner builds require a much stronger combination of factory energy and positional safety before the bot will commit. The factory was also updated to treat rich harvestable mines as something to actively cash out in poor-energy states, and the factory-trade filter now remembers the enemy factory's last seen position so it can avoid some bad blind trades even under fog of war.
+
+This update mattered because it tied the economy logic more closely to timing. A mine is not automatically good just because it exists; it has to arrive early enough, be harvested strongly enough, and still leave the factory in a position where the extra energy can influence the endgame. That made this pass less about "more mining" and more about learning when mining is already too late to be the right answer.
+
+### 16. What I Learned From The Failure Folder
+
+After a while without updating the code, the bot slipping out of the top `10`, and that pushed me to read through the `failure/` folder much more seriously. What stood out pretty quickly was that the same three problems kept repeating across a lot of losses. First, miner plans were failing too often, either because miners never transformed or because they stalled for too long before doing anything useful. Second, even when the bot survived for a while, it was frequently falling behind economically because too much energy was tied up in weak support lines or slow mining ideas. Third, several losses were not immediate survival mistakes at all, but endgames where the bot reached the finish line in a weaker tiebreak position than it should have.
+
+That changed the way I thought about the next round of fixes. Instead of treating each replay like a totally separate story, I started treating them as evidence for a few repeated structural weaknesses. In first person, the lesson for me was pretty simple: I did not need a more complicated bot nearly as much as I needed a bot that gave up on bad miner lines sooner, spent less freely on support units, and converted good mine opportunities into live factory strength earlier.
+
+Based on that, I tightened the opening miner logic again, made stalled miners abort faster when they were still hanging around near the spawn area, and reduced how easily the bot could drift into extra workers without a strong reason. I also kept pushing the factory logic toward better mine cashout behavior and safer endgame decisions, because the failure set made it clear that "having value somewhere on the board" is not the same thing as having a position that actually wins.
+
+What I learned most from this pass is that the bot loses less from one dramatic bug than from repeated small inefficiencies that stack up over a long game. Reading the failure folder all at once made that much more obvious. It pushed me to think less in terms of isolated features and more in terms of repeated failure patterns, which ended up being a much better guide for deciding what to improve next.
 
 ## Current Status
 
