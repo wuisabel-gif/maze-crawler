@@ -39,22 +39,39 @@ This division of labor keeps the policy understandable while still allowing diff
 
 ## Algorithms and Heuristics
 
-The current implementation is built around a few practical algorithmic ideas:
+`BFS + Heuristics`  
+This part of the bot is basically a graph-search problem. Once I stopped thinking of the maze as just tiles on the screen and started thinking of it as a graph, the code became much easier to reason about.
 
-- `BFS` pathfinding with a `deque` frontier for routing through discovered sections of the maze
-- visited-state pruning with sets so robots do not repeatedly expand the same `(col, row)` or `(col, row, jump_cd)` state
-- shortest-path search on an unweighted grid graph, where cells are vertices and legal moves are edges
-- Manhattan-distance scoring for choosing crystals, mining nodes, frontier cells, and other local targets efficiently
-- greedy target selection for choosing nearby crystals, frontier cells, and mining nodes
-- tabu-style recent-cell memory to reduce loops when the map is incomplete
-- collision avoidance heuristics to reduce friendly fire and wasted turns
-- role-based action policies so each robot type contributes differently to the overall plan
+**Brute force intuition**  
+At first, the bot was acting almost greedily. It would look at local moves like `NORTH`, `EAST`, or `WEST` and make short-term decisions based on what seemed immediately useful. That worked for very simple situations, but it broke down once walls, cooldowns, and scroll pressure started interacting. The bot would get stuck, repeat bad moves, or waste turns taking routes that only looked good locally.
 
-What I liked about this part of the build is that it felt very close to the kinds of ideas taught in a data structures class. The maze can be modeled as a graph, the search frontier can be stored in a queue, and each expansion step asks the same core question: what is the next reachable state that moves this robot closer to a useful goal without revisiting already-explored states? On top of that, Manhattan distance works as a lightweight heuristic for ranking targets before committing to a full search, which makes the bot feel like a practical mix of exact graph traversal and cheaper local estimation.
+**Better modeling: treat the maze like a graph**  
+The cleaner way to think about the maze is that every reachable board position is a node and every legal move is an edge. From there, movement stops being a vague navigation problem and becomes a shortest-path problem on an unweighted graph. That is exactly where `BFS` fits naturally.
 
-In practice, the bot now uses several `BFS`-style helper functions for slightly different jobs. Some searches are simple move-only shortest-path checks, while others treat jump cooldown as part of the state and explore tuples like `(col, row, jump_cd)`. That is a very `CSCI 104` kind of idea: once the rules get more complicated, the state space itself has to become richer.
+**Why BFS works well here**  
+Because each move costs the same amount, `BFS` gives the shortest path in terms of number of actions. That matters a lot in Maze Crawler because wasting even a few turns can get a robot trapped by the scroll, delayed behind a wall, or beaten to a crystal or mining node. So instead of just moving in the direction that feels best, the bot uses queue-based search to expand outward level by level until it finds a good reachable target.
 
-This combination was chosen because the environment mixes long-term planning with incomplete information. Pure graph search is not enough when the world is only partially visible, and pure greedy movement is not enough once the maze becomes more complex. The current design tries to use `BFS` where shortest-path structure is reliable and heuristics where the information is still uncertain.
+**State and data structures**  
+This is the part that felt the most like `CSCI 104`. The search uses:
+
+- a `deque` as the `BFS` queue
+- a `set` for visited states
+- tuples like `(col, row)` for simple movement states
+- richer tuples like `(col, row, jump_cd)` when jump cooldown has to be part of the search state
+
+That last part ended up mattering a lot. Once jumps entered the picture, position alone was no longer enough to describe a robot's future options. The real search state had to include both location and mobility state, which is a very data-structures-and-algorithms kind of realization.
+
+**Where Manhattan distance comes in**  
+`BFS` handles the actual shortest-path search, but Manhattan distance is still useful as a lightweight heuristic. Before running a full search, the bot can rank crystals, mining nodes, and frontier cells by Manhattan distance to estimate what is probably worth chasing first. So the overall idea is not `BFS` or heuristics. It is more like:
+
+- use Manhattan distance to rank targets cheaply
+- use `BFS` to actually route to the chosen target safely
+
+**Why not just use one idea everywhere?**  
+This environment mixes long-term planning with incomplete information. Pure graph search is not enough when the world is only partially visible, and pure greedy movement is not enough once the maze becomes more complex. The current design tries to use `BFS` where shortest-path structure is reliable and heuristics where the information is still uncertain.
+
+**What I learned from this**  
+This was one of the clearest examples for me of how data structures and algorithms become real in a project. `BFS` is simple on paper, but in practice the hard part is deciding what counts as a state, what should go in the queue, what belongs in `visited`, when to stop searching, and when a full search is worth doing versus when a heuristic estimate is enough.
 
 ## Thought Process Behind the Build
 
