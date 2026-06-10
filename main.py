@@ -414,6 +414,68 @@ def agent(obs, config):
 
         return None
 
+    def bfs_best_progress_action(start, avoid, depth, init_jump_cd, allow_south):
+        directions = DIRS if allow_south else ("NORTH", "EAST", "WEST")
+        queue = deque([(start[0], start[1], 0, None, init_jump_cd)])
+        visited = {(start[0], start[1], init_jump_cd)}
+        best_action = None
+        best_state = (start[1], 0, 0)
+
+        while queue:
+            col, row, dist, first_action, jump_cd = queue.popleft()
+            state_score = (row, -dist, 1 if first_action == "NORTH" else 0)
+            if dist > 0 and state_score > best_state:
+                best_state = state_score
+                best_action = first_action
+            if dist >= depth:
+                continue
+
+            for direction in directions:
+                if not can_move(col, row, direction):
+                    continue
+                next_col, next_row = next_pos(col, row, direction)
+                if (next_col, next_row) in avoid:
+                    continue
+                next_jump_cd = max(0, jump_cd - 1)
+                state = (next_col, next_row, next_jump_cd)
+                if state in visited:
+                    continue
+                visited.add(state)
+                queue.append(
+                    (
+                        next_col,
+                        next_row,
+                        dist + 1,
+                        first_action or direction,
+                        next_jump_cd,
+                    )
+                )
+
+            if jump_cd == 0:
+                for direction in DIRS:
+                    if not can_jump(col, row, direction):
+                        continue
+                    dc, dr = OFFSETS[direction]
+                    next_col = col + 2 * dc
+                    next_row = row + 2 * dr
+                    if (next_col, next_row) in avoid:
+                        continue
+                    state = (next_col, next_row, config.factoryJumpCooldown)
+                    if state in visited:
+                        continue
+                    visited.add(state)
+                    queue.append(
+                        (
+                            next_col,
+                            next_row,
+                            dist + 1,
+                            first_action or f"JUMP_{direction}",
+                            config.factoryJumpCooldown,
+                        )
+                    )
+
+        return best_action
+
     def reserve_action(col, row, action):
         if action in DIRS:
             reserved.add(next_pos(col, row, action))
@@ -552,6 +614,15 @@ def agent(obs, config):
         danger_gap = fr - south
         in_danger = south > 0 and danger_gap <= 4
         forbid_south = danger_gap <= 6
+        enemy_factory_row = (
+            remembered_enemy_factory_pos[1]
+            if remembered_enemy_factory_pos is not None
+            else None
+        )
+        factory_row_deficit = (
+            enemy_factory_row - fr if enemy_factory_row is not None else 0
+        )
+        late_survival_mode = south >= 24 or factory_row_deficit >= 4
         allow_worker_feed = not in_danger and factory_build_cd > 0 and fe >= 650
 
         if allow_worker_feed:
@@ -595,6 +666,14 @@ def agent(obs, config):
                     factory_jump_cd,
                     False,
                 )
+            if step is None:
+                step = bfs_best_progress_action(
+                    factory_pos,
+                    enemy_positions | reserved,
+                    20,
+                    factory_jump_cd,
+                    False,
+                )
             if step is not None:
                 factory_action = step
 
@@ -603,6 +682,8 @@ def agent(obs, config):
             and factory_move_cd <= 1
             and harvestable_mine_energy >= 350
             and fe <= 500
+            and not late_survival_mode
+            and factory_row_deficit <= 1
         ):
             cashout_target = mine_factory_cashout_target()
             if cashout_target is not None:
@@ -618,7 +699,8 @@ def agent(obs, config):
                     factory_action = step
 
         if factory_action is None and factory_move_cd <= 1:
-            long_goals = [(col, min(north, fr + 25)) for col in range(width)]
+            goal_push = 18 if late_survival_mode else 25
+            long_goals = [(col, min(north, fr + goal_push)) for col in range(width)]
             polite_avoid = enemy_positions | {
                 (my_robots[uid][1], my_robots[uid][2])
                 for uid in workers + scouts + miners
@@ -640,12 +722,21 @@ def agent(obs, config):
                     factory_jump_cd,
                     not forbid_south,
                 )
+            if step is None:
+                step = bfs_best_progress_action(
+                    factory_pos,
+                    enemy_positions,
+                    24 if late_survival_mode else 18,
+                    factory_jump_cd,
+                    not forbid_south,
+                )
             if step is not None:
                 factory_action = step
 
         if (
             factory_action is None
             and not in_danger
+            and not late_survival_mode
             and factory_build_cd == 0
             and not (get_walls(fc, fr) & WALL_BITS["NORTH"])
         ):
@@ -824,6 +915,14 @@ def agent(obs, config):
                         factory_jump_cd,
                         not forbid_south,
                     )
+                    if safer_action is None:
+                        safer_action = bfs_best_progress_action(
+                            factory_pos,
+                            enemy_positions | friendly_support_positions,
+                            16,
+                            factory_jump_cd,
+                            not forbid_south,
+                        )
                 if (
                     safer_action is not None
                     and action_destination(fc, fr, safer_action)
@@ -884,6 +983,14 @@ def agent(obs, config):
                         factory_jump_cd,
                         not forbid_south,
                     )
+                    if safer_action is None:
+                        safer_action = bfs_best_progress_action(
+                            factory_pos,
+                            safer_avoid,
+                            16,
+                            factory_jump_cd,
+                            not forbid_south,
+                        )
                 if (
                     safer_action is not None
                     and action_destination(fc, fr, safer_action)
@@ -910,6 +1017,16 @@ def agent(obs, config):
         mine_target = best_harvestable_mine((wc, wr), 12, 140)
         if transfer_action is not None:
             worker_action = transfer_action
+        elif (
+            factory_pos is not None
+            and south >= 28
+            and we >= 80
+            and move_cooldown(worker) <= 1
+            and manhattan((wc, wr), factory_pos) <= 14
+        ):
+            worker_action = bfs_first_action(
+                (wc, wr), [factory_pos], reserved | enemy_positions, 18, 999
+            )
         elif mine_target is not None and we <= 180 and move_cooldown(worker) <= 1:
             step = bfs_first_action(
                 (wc, wr), [mine_target], reserved | enemy_positions, 18, 999
@@ -1024,7 +1141,10 @@ def agent(obs, config):
                 miner_action = bfs_first_action(
                     miner_pos, [node_target], reserved | enemy_positions, 30, 999
                 )
-            elif miner_abort and manhattan(miner_pos, factory_pos) <= 24:
+            elif (
+                miner_abort
+                or (south >= 28 and me >= 80)
+            ) and manhattan(miner_pos, factory_pos) <= 24:
                 miner_action = bfs_first_action(
                     miner_pos, [factory_pos], reserved | enemy_positions, 24, 999
                 )
@@ -1062,7 +1182,9 @@ def agent(obs, config):
         if scout_action is None and move_cooldown(scout) <= 0:
             goals = None
             mine_target = best_harvestable_mine(scout_pos, 14, 140)
-            if mine_target is not None and se <= 70:
+            if south >= 28 and se >= 35 and factory_pos is not None:
+                goals = [factory_pos]
+            elif mine_target is not None and se <= 70:
                 goals = [mine_target]
             elif se > 80 and factory_pos is not None:
                 goals = [factory_pos]
