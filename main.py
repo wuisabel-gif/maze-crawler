@@ -471,6 +471,9 @@ def agent(obs, config):
     workers = [uid for uid, data in units if data[0] == WORKER]
     scouts = [uid for uid, data in units if data[0] == SCOUT]
     miners = [uid for uid, data in units if data[0] == MINER]
+    total_workers = len(workers)
+    total_scouts = len(scouts)
+    total_miners = len(miners)
     active_miners = [
         uid for uid in miners if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
     ]
@@ -659,8 +662,13 @@ def agent(obs, config):
             opening_worker_job = bool(
                 close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"])
             )
-            allow_second_worker = (
+            worker_build_ok = (
                 opening_worker_job
+                or bool(friendly_mines)
+                or harvestable_mine_energy >= 250
+            )
+            allow_second_worker = (
+                worker_build_ok
                 and not no_mine_plan
                 and not friendly_mines
                 and not stranded_supports
@@ -671,7 +679,7 @@ def agent(obs, config):
             max_workers = 2 if allow_second_worker else 1
             prospect_scout_ok = (
                 (no_mine_plan or opening_phase)
-                and not active_scouts
+                and total_scouts == 0
                 and not active_workers
                 and not miners
                 and stranded_supports == 0
@@ -685,7 +693,7 @@ def agent(obs, config):
             )
             followup_scout_ok = (
                 opening_phase
-                and not active_scouts
+                and total_scouts == 0
                 and not miners
                 and len(active_workers) <= 1
                 and stranded_supports == 0
@@ -714,7 +722,7 @@ def agent(obs, config):
                 and close_nodes
                 and not friendly_mines
                 and not cashout_mode
-                and len(miners) < 1
+                and total_miners < 1
                 and (len(active_workers) + len(active_scouts)) >= 1
                 and fe >= max(500, config.minerCost + 180)
                 and (opening_phase or danger_gap >= 10)
@@ -727,7 +735,7 @@ def agent(obs, config):
                     and urgent_visible_nodes
                     and not friendly_mines
                     and not cashout_mode
-                    and len(miners) < 1
+                    and total_miners < 1
                     and mine_room_ok
                     and late_miner_ok
                 ):
@@ -739,7 +747,9 @@ def agent(obs, config):
                 elif (
                     build_pressure_ok
                     and len(active_workers) < max_workers
+                    and total_workers < (2 if allow_second_worker else 1)
                     and not cashout_mode
+                    and worker_build_ok
                     and (
                         not opening_phase
                         or opening_worker_job
@@ -759,7 +769,7 @@ def agent(obs, config):
                     and not friendly_mines
                     and not no_mine_plan
                     and not cashout_mode
-                    and len(active_scouts) < 1
+                    and total_scouts < 1
                     and len(active_workers) <= 1
                     and scout_room_ok
                 ):
@@ -769,7 +779,7 @@ def agent(obs, config):
                     and not friendly_mines
                     and not no_mine_plan
                     and not cashout_mode
-                    and len(active_scouts) < 1
+                    and total_scouts < 1
                     and len(active_workers) >= 1
                     and scout_room_ok
                     and fe >= scout_reserve + 250
