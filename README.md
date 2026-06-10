@@ -294,9 +294,19 @@ Based on that batch of failures, I tightened the rules around worker production 
 
 What I learned from this round is that losing games in Crawl often looks dramatic at the end, but the real mistake usually happens much earlier in the spending pattern. Reading a whole batch of failures together made that easier to see. It reminded me that the best fix is often not a flashy new mechanic, but a tighter rule about when not to spend in the first place.
 
+### 18. Late-Game North Progress Fix
+
+Going through the newest replays changed my mind about what the biggest problem was. A lot of those losses were not really classic economy collapses. In several games, the factory still had a lot of energy left, but it died one or two rows too low while the opponent survived slightly higher on the board. In other words, the bot was not always losing because it was poor. Sometimes it was losing because it stopped converting a decent position into enough northward progress late in the game.
+
+What made that pattern frustrating was that it often did not look dramatic in the replay. The factory would not make some obviously terrible move. Instead, it would reach a state where the existing pathfinding logic failed to find a far-enough goal quickly, fell back to `IDLE`, and quietly lost the row race. In a few other games, both factories died on the same turn, but I still lost because the opponent entered that final moment with slightly better energy or positioning. That made the real issue feel more like endgame routing discipline than just raw survival.
+
+The fix I made here was to change how the factory thinks when an ideal long-range path is not immediately available. Instead of only searching for ambitious far-north goals and then doing nothing if those goals are not found, the factory now has a `BFS` fallback that looks for the best reachable northward progress state. That means the bot is more willing to take the best available row-improving move now, even if it cannot yet see a perfect full route to a much higher target. I also tightened late-game behavior so that mine cashout detours and new builds are much less likely to interfere once the real problem has become simply staying ahead of the scroll.
+
+What I learned from this pass is that a bot can look strategically reasonable and still lose if its late-game movement policy is too all-or-nothing. In a scrolling game, one extra row matters. Reading this failure batch pushed me to treat late northward progress as its own algorithmic problem, not just something that should automatically fall out of the earlier pathfinding logic.
+
 ## Current Status
 
-The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, A*-based path planning on discovered terrain, and differentiated behavior across scouts, workers, miners, and the factory. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.
+The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, `BFS`-based path planning on discovered terrain, late-game north-progress fallback routing, and differentiated behavior across scouts, workers, miners, and the factory. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.
 
 ## Copyright
 
