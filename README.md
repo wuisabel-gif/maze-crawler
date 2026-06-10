@@ -24,7 +24,7 @@ At the beginning, the agent used simple greedy movement rules: move north when p
 
 The next step was to add persistent per-unit memory. Scouts and miners now keep short movement histories so they are less likely to oscillate between the same few cells. This added a lightweight tabu-style behavior without requiring a full global planner for every situation. The reasoning here was simple: in a maze with partial visibility, even a small amount of memory can dramatically improve movement quality.
 
-After that, the agent was upgraded from one-step greedy movement to actual pathfinding on known terrain. Once enough of the maze has been discovered, units can use A* search to route around walls instead of repeatedly making short-sighted choices. This was an important shift in the project: movement stopped being purely reactive and became more plan-driven.
+After that, the agent was upgraded from one-step greedy movement to actual graph search on known terrain. Once enough of the maze has been discovered, units can use queue-based `BFS` routing to move around walls instead of repeatedly making short-sighted choices. This was an important shift in the project: movement stopped being purely reactive and became more plan-driven.
 
 ## Current Agent Logic
 
@@ -41,13 +41,20 @@ This division of labor keeps the policy understandable while still allowing diff
 
 The current implementation is built around a few practical algorithmic ideas:
 
-- A* pathfinding for routing through discovered sections of the maze
+- `BFS` pathfinding with a `deque` frontier for routing through discovered sections of the maze
+- visited-state pruning with sets so robots do not repeatedly expand the same `(col, row)` or `(col, row, jump_cd)` state
+- shortest-path search on an unweighted grid graph, where cells are vertices and legal moves are edges
+- Manhattan-distance scoring for choosing crystals, mining nodes, frontier cells, and other local targets efficiently
 - greedy target selection for choosing nearby crystals, frontier cells, and mining nodes
 - tabu-style recent-cell memory to reduce loops when the map is incomplete
 - collision avoidance heuristics to reduce friendly fire and wasted turns
 - role-based action policies so each robot type contributes differently to the overall plan
 
-This combination was chosen because the environment mixes long-term planning with incomplete information. Pure graph search is not enough when the world is only partially visible, and pure greedy movement is not enough once the maze becomes more complex. The current design tries to use search where it is reliable and heuristics where the information is still uncertain.
+What I liked about this part of the build is that it felt very close to the kinds of ideas taught in a data structures class. The maze can be modeled as a graph, the search frontier can be stored in a queue, and each expansion step asks the same core question: what is the next reachable state that moves this robot closer to a useful goal without revisiting already-explored states? On top of that, Manhattan distance works as a lightweight heuristic for ranking targets before committing to a full search, which makes the bot feel like a practical mix of exact graph traversal and cheaper local estimation.
+
+In practice, the bot now uses several `BFS`-style helper functions for slightly different jobs. Some searches are simple move-only shortest-path checks, while others treat jump cooldown as part of the state and explore tuples like `(col, row, jump_cd)`. That is a very `CSCI 104` kind of idea: once the rules get more complicated, the state space itself has to become richer.
+
+This combination was chosen because the environment mixes long-term planning with incomplete information. Pure graph search is not enough when the world is only partially visible, and pure greedy movement is not enough once the maze becomes more complex. The current design tries to use `BFS` where shortest-path structure is reliable and heuristics where the information is still uncertain.
 
 ## Thought Process Behind the Build
 
@@ -71,17 +78,20 @@ This project is a good example of applied algorithmic decision-making under unce
 
 This project also reflects ideas from USC's `CSCI 103` and `CSCI 104`. The implementation relies on the programming discipline, modular design, and debugging practices emphasized in `CSCI 103`, while many of the agent's decision-making systems were directly inspired by concepts from `CSCI 104`.
 
-One especially direct connection is the A* pathfinding work from the `CSCI 104` [Rush Hour homework](https://bytes.usc.edu/cs104/homework/hw3/#problem-5---rush-hour-40). Building the bot became a practical way to apply data structures and algorithms in a dynamic environment rather than only through isolated homework problems. Concepts such as graph traversal, `DFS`, shortest-path search, heuristic-driven decision making, recursion, state management, and algorithmic tradeoffs became much more tangible once they directly affected how units behaved inside the maze.
+One especially direct connection is the search material from `CSCI 104`, including the [Rush Hour homework](https://bytes.usc.edu/cs104/homework/hw3/#problem-5---rush-hour-40). Building the bot became a practical way to apply data structures and algorithms in a dynamic environment rather than only through isolated homework problems. Concepts such as graphs, `BFS`, `DFS`, queues, shortest-path search, heuristic-driven decision making, state expansion, visited-set pruning, and algorithmic tradeoffs became much more tangible once they directly affected how units behaved inside the maze.
 
 For example:
 
 - `DFS`-style exploration ideas influenced how scouts reason about partially discovered terrain and frontier expansion
-- A* search inspired the pathfinding layer used once enough map information is available
+- `BFS` is used as the main shortest-path tool because the maze movement graph is unweighted, which makes queue-based search a natural fit
+- the bot's search helpers use a `deque` frontier and `set`-based visited tracking, exactly the kind of queue-and-hash-set pattern emphasized in data structures coursework
+- Manhattan distance is used as a simple heuristic metric for target ranking, which is the kind of grid-based optimization idea that comes up naturally once shortest-path search meets limited compute
+- jump-aware routing treats cooldown as part of the state, so the search space is not just position but position plus future mobility
 - heuristic evaluation helps balance exploration, survival, and resource collection under uncertainty
 - persistent unit memory functions similarly to lightweight tabu-search behavior by discouraging repetitive movement loops
 - role-based coordination mirrors the kind of systems-level decomposition emphasized in algorithmic design
 
-Working on the project also reinforced an important lesson from `CSCI 104`: an algorithm is not just about correctness, but also about tradeoffs between efficiency, flexibility, memory, and behavior under imperfect conditions. In that sense, the bot became more than a Kaggle competition entry. It became a larger systems-style application of core computer science concepts to real-time decision making under uncertainty.
+Working on the project also reinforced an important lesson from `CSCI 104`: an algorithm is not just about correctness, but also about tradeoffs between efficiency, flexibility, memory, and behavior under imperfect conditions. `BFS` may be theoretically simple, but in this project the hard part was deciding what the nodes and edges should mean, what belongs in the state, when to stop the search, and when a cheaper heuristic is actually the better engineering choice. In that sense, the bot became more than a Kaggle competition entry. It became a larger systems-style application of core computer science concepts to real-time decision making under uncertainty.
 
 ## Progress Update
 
