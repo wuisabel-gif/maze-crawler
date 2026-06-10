@@ -304,6 +304,16 @@ The fix I made here was to change how the factory thinks when an ideal long-rang
 
 What I learned from this pass is that a bot can look strategically reasonable and still lose if its late-game movement policy is too all-or-nothing. In a scrolling game, one extra row matters. Reading this failure batch pushed me to treat late northward progress as its own algorithmic problem, not just something that should automatically fall out of the earlier pathfinding logic.
 
+### 19. Opening Miner Signal Filter
+
+After the latest update, I lost two games and won six games. In both games, the bot opened with an early miner, but that miner never actually transformed into a mine. The factory still survived for a long time and even kept a healthy energy total, but the opening spend never turned into the kind of compounding economy that was supposed to justify it. That left the bot in an awkward middle state where it was not completely collapsing, but it was also not getting enough return from its early commitment to keep up with stronger opponents.
+
+What made those losses especially helpful is that they showed two versions of the same mistake. In one game, the miner line failed and the bot later rebuilt workers several times anyway, which meant more support spending without a real mine economy ever materializing. In the other game, the miner line still failed even though the rest of the board stayed relatively clean, and the opponent eventually won the row race with a simpler, more efficient game. That pushed me to think of the issue less as "miners are bad" and more as "opening miners need a much stronger signal before they are worth it."
+
+The fix I made here was to tighten the opening miner gate and add more pressure against repeated no-mine support rebuilding. Early miners now need a clearer visible-node signal instead of just a weak maybe-opportunity, and worker rebuilds are more constrained in games where the bot still has not converted anything into a live mine economy. In other words, if the opening investment is not becoming real, the bot should stop pretending that more support pieces will automatically rescue the plan.
+
+What I learned from these two replays is that a strategy can fail even while looking superficially stable. The factory can still have energy. The board can still look under control. But if the early spending pattern never becomes a real economy advantage, the bot can quietly lose to a cleaner and more disciplined opponent. That made this update feel like another lesson in filtering commitment, not just adding more logic.
+
 ## Current Status
 
 The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, `BFS`-based path planning on discovered terrain, late-game north-progress fallback routing, and differentiated behavior across scouts, workers, miners, and the factory. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.

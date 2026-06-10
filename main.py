@@ -21,6 +21,7 @@ WALL_BITS = {"NORTH": 1, "EAST": 2, "SOUTH": 4, "WEST": 8}
 KNOWN_MINING_NODES = set()
 MINER_MEMORY = {}
 ENEMY_FACTORY_MEMORY = {}
+BUILD_MEMORY = {}
 
 
 def parse_coord(text):
@@ -42,6 +43,10 @@ def agent(obs, config):
         uid: data for uid, data in obs.robots.items() if data[4] != obs.player
     }
     enemy_player = 1 - obs.player
+    player_build_memory = BUILD_MEMORY.setdefault(
+        obs.player,
+        {"factory_uid": None, "worker_builds": 0, "scout_builds": 0, "miner_builds": 0},
+    )
     MINER_MEMORY_KEYS = set(my_robots)
     for stale_uid in list(MINER_MEMORY):
         if stale_uid not in MINER_MEMORY_KEYS:
@@ -604,6 +609,15 @@ def agent(obs, config):
     factory_pos = None
 
     if factory_uid is not None:
+        if player_build_memory["factory_uid"] != factory_uid:
+            player_build_memory.update(
+                {
+                    "factory_uid": factory_uid,
+                    "worker_builds": 0,
+                    "scout_builds": 0,
+                    "miner_builds": 0,
+                }
+            )
         fc, fr, fe = factory_data[1], factory_data[2], factory_data[3]
         factory_pos = (fc, fr)
         factory_action = None
@@ -745,11 +759,18 @@ def agent(obs, config):
             ]
             close_nodes = nearby_open_nodes(factory_pos, 12)
             urgent_visible_nodes = nearby_visible_nodes(factory_pos, 5)
+            urgent_node_distances = [
+                manhattan(factory_pos, cell) for cell in urgent_visible_nodes
+            ]
             close_crystals = nearby_visible_crystals(factory_pos, 4)
             no_mine_plan = not open_nodes
             mine_mode = bool(friendly_mines or active_miners)
             cashout_mode = harvestable_mine_energy >= 250
             opening_phase = south <= 3 and fr <= 10
+            opening_miner_signal = bool(urgent_visible_nodes) and (
+                len(urgent_visible_nodes) >= 2
+                or (urgent_node_distances and min(urgent_node_distances) <= 3)
+            )
             opening_worker_job = bool(
                 close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"])
             )
@@ -757,7 +778,7 @@ def agent(obs, config):
                 opening_phase
                 and total_scouts == 0
                 and total_miners == 0
-                and not urgent_visible_nodes
+                and not opening_miner_signal
                 and not friendly_mines
             )
             worker_build_ok = (
@@ -814,6 +835,14 @@ def agent(obs, config):
                 and (not late_phase or fe >= 950)
                 and (not cashout_mode or fe >= 1050)
             )
+            lifetime_worker_limit = (
+                2
+                if allow_second_worker or friendly_mines or harvestable_mine_energy >= 250
+                else 1
+            )
+            repeated_worker_rebuild_ok = (
+                player_build_memory["worker_builds"] < lifetime_worker_limit
+            )
             scout_mine_followup_ok = (
                 build_pressure_ok
                 and close_nodes
@@ -829,10 +858,11 @@ def agent(obs, config):
             if not spawn_blocked:
                 if (
                     build_pressure_ok
-                    and urgent_visible_nodes
+                    and opening_miner_signal
                     and not friendly_mines
                     and not cashout_mode
                     and total_miners < 1
+                    and player_build_memory["miner_builds"] < 1
                     and mine_room_ok
                     and late_miner_ok
                 ):
@@ -845,6 +875,7 @@ def agent(obs, config):
                     build_pressure_ok
                     and len(active_workers) < max_workers
                     and total_workers < (2 if allow_second_worker else 1)
+                    and repeated_worker_rebuild_ok
                     and not cashout_mode
                     and worker_build_ok
                     and not scout_first_opening
@@ -868,6 +899,7 @@ def agent(obs, config):
                     and not no_mine_plan
                     and not cashout_mode
                     and total_scouts < 1
+                    and player_build_memory["scout_builds"] < 1
                     and len(active_workers) <= 1
                     and scout_room_ok
                 ):
@@ -878,6 +910,7 @@ def agent(obs, config):
                     and not no_mine_plan
                     and not cashout_mode
                     and total_scouts < 1
+                    and player_build_memory["scout_builds"] < 1
                     and len(active_workers) >= 1
                     and scout_room_ok
                     and fe >= scout_reserve + 250
@@ -1001,6 +1034,12 @@ def agent(obs, config):
                     factory_action = "IDLE"
 
         actions[factory_uid] = factory_action or "IDLE"
+        if actions[factory_uid] == "BUILD_WORKER":
+            player_build_memory["worker_builds"] += 1
+        elif actions[factory_uid] == "BUILD_SCOUT":
+            player_build_memory["scout_builds"] += 1
+        elif actions[factory_uid] == "BUILD_MINER":
+            player_build_memory["miner_builds"] += 1
         reserve_action(fc, fr, actions[factory_uid])
 
     for worker_uid in workers:
