@@ -662,6 +662,13 @@ def agent(obs, config):
             opening_worker_job = bool(
                 close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"])
             )
+            scout_first_opening = (
+                opening_phase
+                and total_scouts == 0
+                and total_miners == 0
+                and not urgent_visible_nodes
+                and not friendly_mines
+            )
             worker_build_ok = (
                 opening_worker_job
                 or bool(friendly_mines)
@@ -680,7 +687,6 @@ def agent(obs, config):
             prospect_scout_ok = (
                 (no_mine_plan or opening_phase)
                 and total_scouts == 0
-                and not active_workers
                 and not miners
                 and stranded_supports == 0
                 and not late_phase
@@ -750,6 +756,7 @@ def agent(obs, config):
                     and total_workers < (2 if allow_second_worker else 1)
                     and not cashout_mode
                     and worker_build_ok
+                    and not scout_first_opening
                     and (
                         not opening_phase
                         or opening_worker_job
