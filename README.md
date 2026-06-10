@@ -249,13 +249,23 @@ This update mattered because it tied the economy logic more closely to timing. A
 
 ### 16. What I Learned From The Failure Folder
 
-After a while without updating the code, the bot slipping out of the top `10`, and that pushed me to read through the `failure/` folder much more seriously. What stood out pretty quickly was that the same three problems kept repeating across a lot of losses. First, miner plans were failing too often, either because miners never transformed or because they stalled for too long before doing anything useful. Second, even when the bot survived for a while, it was frequently falling behind economically because too much energy was tied up in weak support lines or slow mining ideas. Third, several losses were not immediate survival mistakes at all, but endgames where the bot reached the finish line in a weaker tiebreak position than it should have.
+After a while without updating the code, I could feel the bot slipping out of the top `10`, and that pushed me to read through the `failure/` folder much more seriously. What stood out pretty quickly was that the same three problems kept repeating across a lot of losses. First, miner plans were failing too often, either because miners never transformed or because they stalled for too long before doing anything useful. Second, even when the bot survived for a while, it was frequently falling behind economically because too much energy was tied up in weak support lines or slow mining ideas. Third, several losses were not immediate survival mistakes at all, but endgames where the bot reached the finish line in a weaker tiebreak position than it should have.
 
 That changed the way I thought about the next round of fixes. Instead of treating each replay like a totally separate story, I started treating them as evidence for a few repeated structural weaknesses. In first person, the lesson for me was pretty simple: I did not need a more complicated bot nearly as much as I needed a bot that gave up on bad miner lines sooner, spent less freely on support units, and converted good mine opportunities into live factory strength earlier.
 
 Based on that, I tightened the opening miner logic again, made stalled miners abort faster when they were still hanging around near the spawn area, and reduced how easily the bot could drift into extra workers without a strong reason. I also kept pushing the factory logic toward better mine cashout behavior and safer endgame decisions, because the failure set made it clear that "having value somewhere on the board" is not the same thing as having a position that actually wins.
 
 What I learned most from this pass is that the bot loses less from one dramatic bug than from repeated small inefficiencies that stack up over a long game. Reading the failure folder all at once made that much more obvious. It pushed me to think less in terms of isolated features and more in terms of repeated failure patterns, which ended up being a much better guide for deciding what to improve next.
+
+### 17. Reading The New Failure Batch
+
+After updating my agent, the situation didn't get better, but in a way that felt even more concrete. The most common pattern was still falling behind economically. Right behind that were miner lines that never really paid off and games where I had simply spent too much on workers for too little return. Seeing those patterns repeated across multiple opponents made it much harder to pretend they were just isolated bad luck or one-off matchup problems.
+
+What I took from that was that the bot still needed to be more disciplined about what kind of economy line it was starting. I did not just need a bot that could sometimes build a miner or sometimes survive for a long time. I needed a bot that was less likely to drift into a weak middle ground where it spent on miners that stalled, spent on workers that did not materially help, and then arrived at the late game both poorer and less flexible than the opponent.
+
+Based on that batch of failures, I tightened the rules around worker production again, especially in openings where workers did not have a very clear job. I also made miner commitment more one-line-at-a-time by using stricter total unit checks, so the bot is less likely to reopen the same weak economy pattern again and again. The overall goal of that pass was to make the bot choose fewer but cleaner commitments rather than sprinkling energy across multiple ideas that never fully develop.
+
+What I learned from this round is that losing games in Crawl often looks dramatic at the end, but the real mistake usually happens much earlier in the spending pattern. Reading a whole batch of failures together made that easier to see. It reminded me that the best fix is often not a flashy new mechanic, but a tighter rule about when not to spend in the first place.
 
 ## Current Status
 
