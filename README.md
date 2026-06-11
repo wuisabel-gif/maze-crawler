@@ -317,6 +317,16 @@ The fix I made here was to tighten the opening miner gate and add more pressure 
 
 What I learned from these two replays is that a strategy can fail even while looking superficially stable. The factory can still have energy. The board can still look under control. But if the early spending pattern never becomes a real economy advantage, the bot can quietly lose to a cleaner and more disciplined opponent. That made this update feel like another lesson in filtering commitment, not just adding more logic.
 
+### 20. No-Idle Row Race Recovery
+
+The phrase of the competition made the row-race problem even clearer. In several of those games, the bot was not actually dying because it had run out of energy. The factory still had hundreds of energy left. What it was running out of was vertical position. A few losses came from ending up one row too low, and in at least one of them the factory's final action was still `IDLE` even though the opponent was continuing to climb. That is the kind of loss that feels small in the moment but completely decides the result.
+
+Those replays also showed that the row-race problem was sometimes connected to the opening economy line. If an opening miner failed to transform, the bot could still drift into extra support spending afterward, which made it harder to recover cleanly once the game shifted from economic possibility to pure positional urgency. So the replay lesson was not only "move north more." It was also "stop spending into a line that has already failed, and then make sure the factory keeps taking row-improving actions when the board gets tight."
+
+The fix I made from that batch had two parts. First, I added a stronger no-idle fallback for the factory. If the opponent's factory is tied or ahead on row, the bot now pushes much harder to find some safe northward progress instead of quietly accepting a passive turn. Second, I tightened production again after failed opening miner lines, so the factory is less likely to keep rebuilding support into a plan that never became a real mine economy in the first place.
+
+What I learned from these replays is that Crawl can punish passive stability just as much as obvious mistakes. A bot can have energy, legal moves, and a seemingly reasonable board state, and still lose because it gave away a couple of rows too quietly. That made this update feel like a lesson in urgency: once the game becomes a row race, even one non-progress turn can be too expensive.
+
 ## Current Status
 
 The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, `BFS`-based path planning on discovered terrain, late-game north-progress fallback routing, and differentiated behavior across scouts, workers, miners, and the factory. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.

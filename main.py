@@ -481,6 +481,21 @@ def agent(obs, config):
 
         return best_action
 
+    def any_safe_factory_move(start, avoid, prefer_north=True, allow_south=False):
+        directions = ["NORTH", "EAST", "WEST"]
+        if allow_south:
+            directions.append("SOUTH")
+        if not prefer_north:
+            directions = ["EAST", "WEST", "NORTH"] + (["SOUTH"] if allow_south else [])
+        for direction in directions:
+            if not can_move(start[0], start[1], direction):
+                continue
+            nxt = next_pos(start[0], start[1], direction)
+            if nxt in avoid:
+                continue
+            return direction
+        return None
+
     def reserve_action(col, row, action):
         if action in DIRS:
             reserved.add(next_pos(col, row, action))
@@ -771,6 +786,11 @@ def agent(obs, config):
                 len(urgent_visible_nodes) >= 2
                 or (urgent_node_distances and min(urgent_node_distances) <= 3)
             )
+            failed_opening_miner = (
+                player_build_memory["miner_builds"] >= 1
+                and not friendly_mines
+                and not active_miners
+            )
             opening_worker_job = bool(
                 close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"])
             )
@@ -834,6 +854,7 @@ def agent(obs, config):
                 and (not mine_mode or fe >= 700)
                 and (not late_phase or fe >= 950)
                 and (not cashout_mode or fe >= 1050)
+                and not failed_opening_miner
             )
             lifetime_worker_limit = (
                 2
@@ -853,6 +874,7 @@ def agent(obs, config):
                 and fe >= max(500, config.minerCost + 180)
                 and (opening_phase or danger_gap >= 10)
                 and late_miner_ok
+                and south <= 12
             )
             spawn_blocked = spawn_cell in occupied_now
             if not spawn_blocked:
@@ -916,6 +938,33 @@ def agent(obs, config):
                     and fe >= scout_reserve + 250
                 ):
                     factory_action = "BUILD_SCOUT"
+
+        if (
+            factory_action is None
+            and factory_move_cd <= 1
+            and enemy_factory_row is not None
+            and enemy_factory_row >= fr
+        ):
+            factory_action = bfs_best_progress_action(
+                factory_pos,
+                enemy_positions | friendly_support_positions | reserved,
+                14,
+                factory_jump_cd,
+                False,
+            )
+
+        if (
+            (factory_action is None or factory_action == "IDLE")
+            and factory_move_cd <= 1
+            and enemy_factory_row is not None
+            and enemy_factory_row >= fr
+        ):
+            factory_action = any_safe_factory_move(
+                factory_pos,
+                enemy_positions | friendly_support_positions | enemy_factory_cells,
+                True,
+                False,
+            ) or factory_action
 
         if factory_action is not None and not factory_action.startswith("BUILD_"):
             destination = action_destination(fc, fr, factory_action)
