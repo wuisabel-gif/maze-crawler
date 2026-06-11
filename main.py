@@ -777,6 +777,7 @@ def agent(obs, config):
             urgent_node_distances = [
                 manhattan(factory_pos, cell) for cell in urgent_visible_nodes
             ]
+            close_node_distances = [manhattan(factory_pos, cell) for cell in close_nodes]
             close_crystals = nearby_visible_crystals(factory_pos, 4)
             no_mine_plan = not open_nodes
             mine_mode = bool(friendly_mines or active_miners)
@@ -786,19 +787,25 @@ def agent(obs, config):
                 len(urgent_visible_nodes) >= 2
                 or (urgent_node_distances and min(urgent_node_distances) <= 3)
             )
+            opening_miner_signal_strong = bool(urgent_visible_nodes) and (
+                len(urgent_visible_nodes) >= 3
+                or (urgent_node_distances and min(urgent_node_distances) <= 2)
+            )
             failed_opening_miner = (
                 player_build_memory["miner_builds"] >= 1
                 and not friendly_mines
                 and not active_miners
             )
+            north_wall_blocked = bool(get_walls(fc, fr) & WALL_BITS["NORTH"])
             opening_worker_job = bool(
-                close_crystals or (get_walls(fc, fr) & WALL_BITS["NORTH"])
+                north_wall_blocked
+                or (friendly_mines and harvestable_mine_energy >= 180)
             )
             scout_first_opening = (
                 opening_phase
                 and total_scouts == 0
                 and total_miners == 0
-                and not opening_miner_signal
+                and not opening_miner_signal_strong
                 and not friendly_mines
             )
             worker_build_ok = (
@@ -871,10 +878,12 @@ def agent(obs, config):
                 and not cashout_mode
                 and total_miners < 1
                 and (len(active_workers) + len(active_scouts)) >= 1
+                and (len(active_workers) >= 1 or min(close_node_distances) <= 4)
                 and fe >= max(500, config.minerCost + 180)
                 and (opening_phase or danger_gap >= 10)
                 and late_miner_ok
                 and south <= 12
+                and factory_row_deficit <= 1
             )
             spawn_blocked = spawn_cell in occupied_now
             if not spawn_blocked:
@@ -887,6 +896,12 @@ def agent(obs, config):
                     and player_build_memory["miner_builds"] < 1
                     and mine_room_ok
                     and late_miner_ok
+                    and factory_row_deficit <= 1
+                    and (
+                        total_scouts >= 1
+                        or not opening_phase
+                        or opening_miner_signal_strong
+                    )
                 ):
                     factory_action = "BUILD_MINER"
                 elif prospect_scout_ok:
@@ -903,7 +918,7 @@ def agent(obs, config):
                     and not scout_first_opening
                     and (
                         not opening_phase
-                        or opening_worker_job
+                        or north_wall_blocked
                         or len(active_workers) > 0
                         or len(active_miners) > 0
                     )
