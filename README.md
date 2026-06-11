@@ -2,7 +2,8 @@
 
 This project is an ongoing attempt to build a competitive agent for Kaggle's Maze Crawler challenge. The core problem is not just moving units through a maze, but making good decisions under fog of war, limited energy, scrolling pressure, and a high penalty for small tactical mistakes. The agent has been built incrementally, starting from simple rule-based movement and growing toward a more structured decision system with search, memory, and role-based coordination.
 
-Competition page: [Kaggle Maze Crawler Overview](https://www.kaggle.com/competitions/maze-crawler/overview)
+Competition page: [Kaggle Maze Crawler Overview](https://www.kaggle.com/competitions/maze-crawler/overview)  
+Repository: [wuisabel-gif/maze-crawler](https://github.com/wuisabel-gif/maze-crawler)
 
 <img src="assets/competition_example.gif" alt="Maze Crawler match example" width="420" />
 
