@@ -791,16 +791,7 @@ def agent(obs, config):
                 len(urgent_visible_nodes) >= 3
                 or (urgent_node_distances and min(urgent_node_distances) <= 2)
             )
-            miner_first_opening_ok = (
-                opening_phase
-                and total_scouts == 0
-                and total_workers == 0
-                and total_miners == 0
-                and opening_miner_signal_strong
-                and urgent_node_distances
-                and min(urgent_node_distances) <= 1
-                and len(urgent_visible_nodes) >= 2
-            )
+            miner_first_opening_ok = False
             failed_opening_miner = (
                 player_build_memory["miner_builds"] >= 1
                 and not friendly_mines
@@ -888,7 +879,14 @@ def agent(obs, config):
                 and not cashout_mode
                 and total_miners < 1
                 and (len(active_workers) + len(active_scouts)) >= 1
-                and (len(active_workers) >= 1 or min(close_node_distances) <= 4)
+                and (
+                    len(active_workers) >= 1
+                    or (
+                        urgent_visible_nodes
+                        and urgent_node_distances
+                        and min(urgent_node_distances) <= 3
+                    )
+                )
                 and fe >= max(500, config.minerCost + 180)
                 and (opening_phase or danger_gap >= 10)
                 and late_miner_ok

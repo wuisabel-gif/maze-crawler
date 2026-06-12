@@ -277,15 +277,15 @@ That pushed this update in a more timing-sensitive direction. Opening miners now
 
 The main takeaway here was that mine value is only real if it arrives on time. A mine that comes online after the row race is already slipping away is not really solving the right problem anymore.
 
-### 16. What I Learned From The Failure Folder
+### 16. What Repeated Losses Taught Me
 
-Once I had enough losses saved up in `failure/`, the useful thing was no longer any one replay by itself. The pattern only became obvious when I looked at them together.
+Once I had enough losses saved up, the useful thing was no longer any one replay by itself. The pattern only became obvious when I looked at them together.
 
 Three problems kept resurfacing. Miner ideas were failing too often. Support spending was dragging on longer than it should. And a surprising number of losses were not flashy tactical disasters at all, but endgames where the bot simply arrived with the weaker position. That shifted the project away from chasing isolated bugs and toward cleaning up repeat offenders.
 
 From that point on, the work became more about discipline than complexity: cut bad miner lines earlier, spend less casually on support, and make sure mine value turns back into live factory strength before the game state moves on.
 
-### 17. Reading The New Failure Batch
+### 17. Another Round Of Replay Review
 
 The next batch of losses made the economy problem look even less accidental. It was not just that the bot sometimes missed a mine. It was that it kept drifting into awkward middle states where it had spent energy on an idea without ever fully converting that idea into position or income.
 
@@ -325,9 +325,9 @@ That was the interesting difference in this batch. Two of the replays still ende
 
 So this pass tightened miner follow-through instead of removing it. Follow-up miner builds now need a cleaner board state, a stronger nearby node signal, and less row pressure before they are allowed to go through. The idea is to keep the good mine openings while cutting the ones that quietly freeze the factory in place for too long.
 
-### 22. Studying Winner Replays
+### 22. Studying Strong Opponents
 
-Looking through the `winner/` folder was useful for a different reason than reading failures. The failure batches made it easier to see what my bot was doing wrong. The winner replays made it easier to see what strong play looked like when it was working cleanly.
+Looking through strong opponent replays was useful for a different reason than reviewing losses. The losses made it easier to see what my bot was doing wrong. The stronger replays made it easier to see what clean, effective play looked like when it was working.
 
 The biggest pattern was not one exact recipe, but a style. The strongest replays were much less dependent on workers than I expected, much more comfortable opening with scouts, and much faster about turning real node information into miner conversions. They also did a better job of avoiding the awkward middle ground where the factory spends on support without gaining either meaningful map control or a real mine economy.
 
