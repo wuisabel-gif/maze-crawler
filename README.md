@@ -333,9 +333,39 @@ The biggest pattern was not one exact recipe, but a style. The strongest replays
 
 That changed the opening logic in a fairly specific way. Miner-first openings are now rarer unless the node signal is genuinely strong, early workers need a more direct justification, and scout-first lines get more room to happen before the factory commits to a slower follow-up. The goal was not to copy one top player action for action. It was to borrow the broader lesson that early tempo and cleaner commitments matter more than filling the board with units.
 
+### 23. Local Simulation and A/B Testing
+
+For a long time the only feedback loop was reading replays after the fact. That was good for understanding what went wrong, but it could never answer the more important question: does a proposed fix actually make the bot better, or does it just feel better? Several earlier updates were really educated guesses, validated only by the next batch of ladder games days later.
+
+That finally changed by getting the environment running locally. The setup is deliberately simple: a dedicated Python `3.12` virtual environment with `kaggle-environments` installed, which ships the `crawl` game itself, so no opponent server or Kaggle account is needed to play full matches offline. (The newer system Python failed to build one of the package's dependencies, so pinning a clean `3.12` environment was the practical fix.)
+
+On top of that sits a small benchmark harness, `bench.py`, which loads two agent files and runs them against each other over a range of fixed seeds, swapping which side each plays so neither benefits from the starting position, then reports win rate and average energy margin. In practice a change is tested with one command, something like `python bench.py main.py baseline_main.py 30`, where `baseline_main.py` is a frozen snapshot of the previous accepted version. A separate `random` opponent is used as a quick sanity check that nothing is catastrophically broken. Because the whole `crawl` engine runs in-process, a full match takes a fraction of a second, so dozens of games can be played in the time it used to take to eyeball a single replay. Instead of shipping a change and hoping, the loop became propose, measure, keep only what wins.
+
+Reading the engine source directly also clarified the rules that the heuristics were quietly guessing at before, most importantly that a mine's stored energy never counts for anything until a unit physically stands on it and drains it, and that the factory is the only unit with unlimited energy capacity. Those two facts ended up driving the economy work in the next two updates.
+
+This update mattered more than any single gameplay tweak, because it immediately caught a "good idea" that was actually a regression. A factory-plus-worker convoy escort, modeled directly on what the strongest replays appeared to be doing, looked completely reasonable in isolation. Played head to head, it lost badly and was dropped. The lesson was uncomfortable but useful: replay intuition is a hypothesis, not a result, and the only honest way to tell them apart is to run the games.
+
+### 24. Miners That Actually Transform
+
+The first thing the new simulation made painfully clear was that the bot was building almost no economy at all. In game after game the factory coasted on its starting energy and slowly bled out, while the strongest opponents compounded energy off a single mine. Tracing it down revealed an embarrassing root cause: miners were walking all the way onto a mining node and then just standing on it, issuing nothing, sometimes for dozens of turns.
+
+The culprit was an overly cautious transform gate. It refused to create a mine unless the node was many rows above the scroll *and* a collector was already positioned nearby, conditions a freshly arrived miner almost never satisfied, and which only got worse as the scroll rose. A rule meant to avoid building bad mines had quietly been blocking every mine.
+
+To address that, mine creation was relaxed to the thing it should have been all along: a miner standing on a known node simply transforms whenever it has the energy and the node sits far enough above the scroll to be worth it. Mines finally started appearing on the board. A more aggressive "go hunt for a node and rebuild miners" variant was also tested, but it turned out to be a wash, because the extra miner rebuilds cost as much as the extra mines earned, so it was left out. The keeper was the small, clean change, confirmed by a steady positive margin over many games.
+
+### 25. Harvesting Your Own Mines
+
+Getting mines onto the board surfaced the next problem, and it was a bigger one. The mines were never being collected. Diagnostics showed every friendly mine filling all the way to its cap and then being crushed by the scroll with zero energy ever drained out of it. Because mine energy only counts toward the score once a unit actually pulls it into itself, those mines were pure waste dressed up as economy.
+
+The fix used a mechanic that was sitting in plain sight: the factory is an unlimited energy sink, and it is already climbing north anyway. So the factory was allowed to detour briefly onto its own mines and vacuum them as it passes. In mining games, final factory energy roughly tripled, which matters enormously because nearly half of all games are decided by total energy at a tiebreak rather than by who survives.
+
+This update also produced two more reverted experiments worth recording. A greedier cash-out captured even more energy per mine, but won fewer games, because the longer detours occasionally got the factory crushed. And a separate filter that tried to dodge the enemy factory entirely, to avoid losing mutual-collision trades, backfired the same way by boxing our own factory against the scroll. Both were measured, both lost, both were thrown out. The recurring lesson across all three was the same one the row-race fixes taught earlier: the factory's freedom to keep moving north is the single most protected thing in the whole policy, and changes that quietly trade it away for something else tend to lose even when the something else looks valuable.
+
 ## Current Status
 
-The agent is functional and has moved beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, `BFS`-based path planning on discovered terrain, late-game north-progress fallback routing, tighter miner gating, and a more scout-led opening structure. The project is still in progress, with the next major focus being stronger local evaluation through simulation and more robust strategic tuning.
+The agent is functional and has moved well beyond the starter-policy stage. It now includes persistent unit memory, safer movement rules, `BFS`-based path planning on discovered terrain, late-game north-progress fallback routing, tighter miner gating, a more scout-led opening structure, and a working mine-to-factory economy loop where miners reliably convert nodes into mines and the factory harvests them before the scroll takes them away.
+
+Just as importantly, the project now has the local-simulation and `A/B` testing loop that earlier updates were missing, so changes can be validated by win rate and energy margin over many games instead of by replay intuition alone. That loop has already paid for itself by catching several plausible-looking ideas that were actually regressions. The project is still in progress, with the next major focus being stronger energy capture, in particular collecting a mine's continuing income rather than a single pass, and more robust strategic tuning on top of the measurement framework now in place.
 
 ## Copyright
 
