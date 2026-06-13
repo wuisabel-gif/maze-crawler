@@ -573,35 +573,13 @@ def agent(obs, config):
     ]
     stranded_supports = len(stranded_workers) + len(stranded_scouts)
     late_phase = south >= 35
-
-    # Convoy escort: keep one live worker glued to the factory's north side so
-    # it can clear the wall lane ahead (REMOVE_NORTH) while the factory climbs.
-    # Failure replays showed the factory ending up ALONE and getting crushed by
-    # the scroll because no unit could open its blocked northern path.
+    # Assign factory_pos BEFORE the mine helpers run. mine_collectors_available()
+    # closes over factory_pos; it is first called from harvestable_mine_energy
+    # below, which happens once friendly mines exist. Previously factory_pos was
+    # only assigned further down, so that early call raised NameError, agent()
+    # threw, and act() returned {} — every unit IDLE for the turn.
     factory_cell = (factory_data[1], factory_data[2]) if factory_data is not None else None
-    # Assign factory_pos here (not after the mine helpers) so closures such as
-    # mine_collectors_available don't reference it before assignment — that
-    # latent ordering bug made agent() raise and act() return {} (all units
-    # IDLE) whenever friendly mines existed.
     factory_pos = factory_cell
-    factory_gap = (factory_data[2] - south) if factory_data is not None else None
-    escort_active = factory_cell is not None and (
-        south >= 18 or (factory_gap is not None and factory_gap <= 6)
-    )
-    escort_worker_uid = None
-    if factory_cell is not None and escort_active:
-        escort_candidates = [
-            uid
-            for uid in workers
-            if my_robots[uid][3] > 0 and my_robots[uid][2] >= south
-        ]
-        if escort_candidates:
-            escort_worker_uid = min(
-                escort_candidates,
-                key=lambda uid: manhattan(
-                    factory_cell, (my_robots[uid][1], my_robots[uid][2])
-                ),
-            )
     harvestable_mine_energy = sum(
         value[0]
         for cell, value in remembered_mines.items()
@@ -710,66 +688,6 @@ def agent(obs, config):
             and can_jump(fc, fr, "NORTH")
         ):
             factory_action = "JUMP_NORTH"
-
-        # Escort funding/clearing setup: is the escort worker sitting directly
-        # north of the factory (the cell the factory will climb into)?
-        escort_north = (
-            escort_worker_uid is not None
-            and (
-                my_robots[escort_worker_uid][1],
-                my_robots[escort_worker_uid][2],
-            )
-            == (fc, fr + 1)
-        )
-        north_cell = (fc, fr + 1)
-        north_open = can_move(fc, fr, "NORTH")
-        north_blocked_by_friend = north_cell in friendly_support_positions
-        # Anti-oscillation: in survival mode, if a northward step is available
-        # and the cell ahead is free (or held by an escort worker that can
-        # vacate north this turn), just climb. Sideways detours lose the race
-        # with the scroll and were the direct cause of every crush death.
-        if (
-            factory_action is None
-            and (late_survival_mode or in_danger)
-            and factory_move_cd <= 1
-            and north_open
-            and north_cell not in enemy_positions
-            and north_cell not in reserved
-        ):
-            north_safe = True
-            if north_blocked_by_friend:
-                north_safe = (
-                    escort_north
-                    and can_move(fc, fr + 1, "NORTH")
-                    and (fc, fr + 2) not in enemy_positions
-                )
-            if north_safe:
-                factory_action = "NORTH"
-
-        # Build a replacement escort worker when none is in position and the gap
-        # is comfortable enough to spend a turn building instead of moving.
-        need_escort = escort_worker_uid is None or (
-            factory_cell is not None
-            and manhattan(
-                factory_cell,
-                (
-                    my_robots[escort_worker_uid][1],
-                    my_robots[escort_worker_uid][2],
-                ),
-            )
-            > 2
-        )
-        if (
-            factory_action is None
-            and south >= 18
-            and need_escort
-            and factory_build_cd == 0
-            and danger_gap >= 8
-            and (fc, fr + 1) not in occupied_now
-            and total_workers < 2
-            and fe >= config.workerCost + 250
-        ):
-            factory_action = "BUILD_WORKER"
 
         if factory_action is None and in_danger and factory_move_cd <= 1:
             urgent_goals = [(col, min(north, fr + 8)) for col in range(width)]
@@ -1194,18 +1112,6 @@ def agent(obs, config):
                 elif factory_action.startswith("BUILD_") or destination != factory_pos:
                     factory_action = "IDLE"
 
-        # On a turn the factory cannot move (move on cooldown), fund the escort
-        # worker so it can keep paying for REMOVE_NORTH wall clears ahead.
-        if (
-            (factory_action is None or factory_action == "IDLE")
-            and escort_north
-            and factory_move_cd > 1
-            and north_open
-            and my_robots[escort_worker_uid][3] < config.wallRemoveCost + 80
-            and fe >= worker_reserve + config.wallRemoveCost
-        ):
-            factory_action = "TRANSFER_NORTH"
-
         actions[factory_uid] = factory_action or "IDLE"
         if actions[factory_uid] == "BUILD_WORKER":
             player_build_memory["worker_builds"] += 1
@@ -1224,43 +1130,6 @@ def agent(obs, config):
         wc, wr, we = worker[1], worker[2], worker[3]
         worker_action = None
         gap = wr - south
-
-        # Convoy escort: the designated worker stays one row north of the
-        # factory and clears the wall lane ahead so the factory can keep
-        # climbing out of the scroll. This is the behavior that lets the
-        # top agents' factories survive to the end.
-        if (
-            worker_uid == escort_worker_uid
-            and escort_active
-            and factory_pos is not None
-        ):
-            fcol, frow = factory_pos
-            in_position = wc == fcol and wr in (frow + 1, frow + 2)
-            if in_position:
-                fact_moving_north = actions.get(factory_uid) in ("NORTH", "JUMP_NORTH")
-                if (get_walls(wc, wr) & WALL_BITS["NORTH"]) and we >= config.wallRemoveCost:
-                    worker_action = "REMOVE_NORTH"
-                elif (
-                    fact_moving_north
-                    and can_move(wc, wr, "NORTH")
-                    and (wc, wr + 1) not in reserved
-                    and (wc, wr + 1) not in enemy_positions
-                ):
-                    worker_action = "NORTH"
-                else:
-                    worker_action = "IDLE"
-            elif move_cooldown(worker) <= 1:
-                worker_action = bfs_first_action(
-                    (wc, wr),
-                    [(fcol, frow + 1)],
-                    reserved | enemy_positions,
-                    22,
-                    999,
-                )
-            if worker_action is not None:
-                actions[worker_uid] = worker_action
-                reserve_action(wc, wr, worker_action)
-                continue
 
         transfer_action = can_transfer_to_factory(wc, wr, we, 120)
         mine_target = best_harvestable_mine((wc, wr), 12, 140)
