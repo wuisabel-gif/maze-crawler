@@ -1,1 +1,5 @@
 __pycache__/
+.venv/
+.venv312/
+.DS_Store
+.ruff_cache/
