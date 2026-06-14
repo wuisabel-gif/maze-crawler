@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MAZE CRAWLER — an arcade dev log</title>
+<meta name="description" content="Building a competitive agent for Kaggle's Maze Crawler, a two-player scrolling-maze RTS. From rank 400 to the top 4 — the levels, the lessons, and what the games taught me about discipline, measurement, and survival." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+@font-face{font-family:"ALK Life";src:url("fonts/alk-life.ttf") format("truetype");font-display:swap}
+@font-face{font-family:"ALK Rounded";src:url("fonts/alk-rounded.ttf") format("truetype");font-display:swap}
+
+:root{
+  --bg:      oklch(0.135 0.022 266);
+  --bg2:     oklch(0.105 0.020 266);
+  --panel:   oklch(0.175 0.026 266);
+  --panel2:  oklch(0.205 0.028 266);
+  --line:    oklch(1 0 0 / 0.14);
+  --line2:   oklch(1 0 0 / 0.28);
+
+  --ink:   oklch(0.975 0.01 95);
+  --ink2:  oklch(0.85 0.015 95);
+  --muted: oklch(0.66 0.03 266);
+
+  --pink: oklch(0.71 0.215 352);   /* P1 / energy / you */
+  --cyan: oklch(0.82 0.135 205);   /* info / vision / scan */
+  --gold: oklch(0.84 0.155 82);    /* score / coin */
+  --green:oklch(0.84 0.19 150);    /* win / go */
+  --red:  oklch(0.65 0.235 25);    /* danger / game over */
+
+  --display:"ALK Life","Trebuchet MS",sans-serif;
+  --ui:"ALK Rounded",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+
+  --maxw:1180px;
+  --pad:clamp(1rem,4.5vw,3.5rem);
+  --ease:cubic-bezier(0.22,1,0.36,1);
+  --z-scan:60; --z-nav:100;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+
+body{
+  margin:0;background:var(--bg);color:var(--ink2);
+  font-family:var(--ui);font-size:clamp(1rem,.95rem+.2vw,1.1rem);line-height:1.62;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+/* glow field — baked background image (assets/glow_field.jpg) */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:var(--bg2) url("media/glow_field.jpg") center / cover no-repeat;
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(oklch(1 0 0/.022) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(1 0 0/.022) 1px, transparent 1px);
+  background-size:34px 34px;
+  -webkit-mask-image:radial-gradient(120% 100% at 50% 0%, #000 30%, transparent 90%);
+          mask-image:radial-gradient(120% 100% at 50% 0%, #000 30%, transparent 90%);
+}
+/* CRT scanlines + vignette overlay */
+.crt{position:fixed;inset:0;z-index:var(--z-scan);pointer-events:none}
+.crt::before{content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(transparent 0 2px, oklch(0 0 0/.22) 2px 3px);opacity:.5}
+.crt::after{content:"";position:absolute;inset:0;
+  box-shadow:inset 0 0 180px 30px oklch(0 0 0/.55);
+  background:radial-gradient(130% 120% at 50% 50%, transparent 62%, oklch(0 0 0/.4))}
+@media (prefers-reduced-motion: no-preference){
+  .crt{animation:flick 5s steps(60) infinite}
+  @keyframes flick{0%,97%,100%{opacity:1}98%{opacity:.92}99%{opacity:.97}}
+}
+
+a{color:inherit}
+h1,h2,h3{margin:0;color:var(--ink);font-weight:400;line-height:1.04;text-wrap:balance}
+p{margin:0;text-wrap:pretty}
+em{font-style:normal;color:var(--pink)}
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:var(--pad)}
+.mono{font-family:var(--mono)}
+.disp{font-family:var(--display)}
+
+/* shared arcade label */
+.tag{display:inline-flex;align-items:center;gap:.5rem;font-family:var(--mono);font-weight:700;
+  font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--bg);
+  background:var(--pink);padding:.28rem .6rem;border-radius:3px}
+.tag.cy{background:var(--cyan)} .tag.go{background:var(--gold)} .tag.gr{background:var(--green)}
+.blink{animation:blink 1.1s steps(2) infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.15}}
+@media (prefers-reduced-motion: reduce){.blink{animation:none}}
+
+/* panels — the arcade cabinet windows */
+.panel{position:relative;background:var(--panel);border:2px solid var(--line2);border-radius:6px;
+  box-shadow:0 0 0 4px var(--bg), 0 18px 50px -24px #000}
+.panel-bar{display:flex;align-items:center;gap:.5rem;height:30px;padding:0 .7rem;
+  border-bottom:2px solid var(--line2);font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+.panel-bar .dots{display:flex;gap:5px;margin-right:.3rem}
+.panel-bar .dots i{width:8px;height:8px;border-radius:50%;background:var(--line2)}
+.panel-bar .dots i:nth-child(1){background:var(--red)}
+.panel-bar .dots i:nth-child(2){background:var(--gold)}
+.panel-bar .dots i:nth-child(3){background:var(--green)}
+.panel-bar .grow{margin-left:auto}
+.panel-bar b{color:var(--gold);font-weight:500}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:.5rem;text-decoration:none;cursor:pointer;
+  font-family:var(--mono);font-weight:700;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;
+  padding:.75rem 1.15rem;border-radius:5px;border:2px solid var(--line2);background:transparent;color:var(--ink);
+  transition:transform .12s var(--ease),background .15s,color .15s,box-shadow .15s,border-color .15s}
+.btn:active{transform:translateY(2px)}
+.btn-p{background:var(--pink);border-color:var(--pink);color:var(--bg2);box-shadow:0 0 24px -4px var(--pink)}
+.btn-p:hover{box-shadow:0 0 34px 0 var(--pink)}
+.btn-g:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 22px -8px var(--cyan)}
+
+/* ---------- top HUD nav ---------- */
+.hud{position:sticky;top:0;z-index:var(--z-nav);background:oklch(0.105 0.02 266 /.82);
+  backdrop-filter:blur(8px);border-bottom:2px solid var(--line2)}
+.hud .wrap{display:flex;align-items:center;gap:1rem;height:54px}
+.hud .logo{font-family:var(--display);font-size:1.4rem;color:var(--ink);letter-spacing:.02em;display:flex;align-items:center;gap:.5rem}
+.hud .logo .coin{width:14px;height:14px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold);display:grid;place-items:center;font-family:var(--mono);font-size:8px;font-weight:700;color:var(--bg)}
+.hud nav{margin-left:auto;display:flex;gap:clamp(.7rem,1.8vw,1.6rem);font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+.hud nav a{color:var(--muted);text-decoration:none;transition:color .15s}
+.hud nav a:hover{color:var(--pink)}
+.hud .hi{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--muted);white-space:nowrap}
+.hud .hi b{color:var(--gold)}
+@media(max-width:780px){ .hud nav{display:none} }
+
+/* ---------- hero / title screen ---------- */
+.hero{padding-block:clamp(2rem,5vw,4rem)}
+.hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:clamp(1.5rem,4vw,3rem);align-items:center}
+@media(max-width:900px){ .hero-grid{grid-template-columns:1fr} }
+.p1{font-family:var(--mono);font-size:.74rem;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase;display:flex;gap:.8rem;align-items:center;margin-bottom:1.1rem}
+.p1 .rk{color:var(--muted)} .p1 .rk b{color:var(--gold)}
+.hero h1{font-family:var(--display);font-size:clamp(3.4rem,1.8rem+8vw,7rem);color:var(--ink);letter-spacing:.01em;line-height:.92;
+  text-shadow:4px 4px 0 oklch(0.71 0.215 352 / .28)}
+.hero h1 .l2{color:var(--pink);text-shadow:0 0 40px oklch(0.71 0.215 352 /.55),4px 4px 0 oklch(0.82 0.135 205 /.25)}
+.hero .lede{margin-top:1.3rem;max-width:44ch;font-size:clamp(1.05rem,1rem+.4vw,1.25rem);color:var(--ink2)}
+.hero .lede b{color:var(--ink);font-weight:700}
+.start{margin-top:1.9rem;display:flex;flex-wrap:wrap;gap:.8rem;align-items:center}
+.press{font-family:var(--mono);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+
+.screen{border:2px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--bg2);
+  box-shadow:0 0 0 4px var(--bg),0 26px 70px -30px #000, inset 0 0 90px oklch(0.71 0.215 352 /.06)}
+.screen .bar{display:flex;align-items:center;gap:.5rem;height:30px;padding:0 .7rem;border-bottom:2px solid var(--line2);font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.screen .bar .grow{margin-left:auto}
+.screen .bar b{color:var(--pink)}
+#maze{display:block;width:100%;height:clamp(320px,44vh,440px)}
+.screen .foot{display:flex;justify-content:space-between;padding:.5rem .75rem;border-top:2px solid var(--line2);font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.screen .foot b{color:var(--red)}
+
+/* ---------- score ribbon ---------- */
+.scores{border-block:2px solid var(--line2);background:oklch(0.10 0.02 266 /.6)}
+.scores .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
+.scores .s{padding:1.3rem clamp(.8rem,2.5vw,1.8rem);border-left:2px solid var(--line)}
+.scores .s:first-child{border-left:0}
+.scores .lab{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.scores .num{font-family:var(--mono);font-weight:700;font-size:clamp(1.7rem,1rem+2.6vw,2.7rem);color:var(--gold);line-height:1.1;margin-top:.3rem;text-shadow:0 0 18px oklch(0.84 0.155 82 /.4)}
+.scores .num.pk{color:var(--pink);text-shadow:0 0 18px oklch(0.71 0.215 352 /.45)}
+.scores .num.cy{color:var(--cyan)}
+@media(max-width:720px){ .scores .wrap{grid-template-columns:repeat(2,1fr)} .scores .s:nth-child(3){border-left:0} }
+
+/* ---------- generic section ---------- */
+.sec{padding-block:clamp(3rem,7vw,5.5rem)}
+.shead{margin-bottom:clamp(1.8rem,4vw,3rem);max-width:62ch}
+.shead h2{font-family:var(--display);font-size:clamp(2rem,1.3rem+3.2vw,3.7rem);margin-top:.7rem;color:var(--ink)}
+.shead p{margin-top:.9rem;color:var(--ink2);font-size:clamp(1.02rem,1rem+.3vw,1.18rem);max-width:56ch}
+
+/* roster / character select */
+.roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:clamp(.7rem,1.5vw,1rem)}
+.char{position:relative;border:2px solid var(--line);border-radius:7px;background:var(--panel);padding:1.1rem;transition:transform .2s var(--ease),border-color .2s,box-shadow .2s}
+.char:hover{transform:translateY(-3px)}
+.char.f:hover{border-color:var(--ink);box-shadow:0 0 26px -10px var(--ink)}
+.char.s:hover{border-color:var(--gold);box-shadow:0 0 26px -10px var(--gold)}
+.char.w:hover{border-color:var(--green);box-shadow:0 0 26px -10px var(--green)}
+.char.m:hover{border-color:var(--pink);box-shadow:0 0 26px -10px var(--pink)}
+.char .spr{width:42px;height:42px;border-radius:6px;display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--bg2);image-rendering:pixelated}
+.char.f .spr{background:var(--ink)} .char.s .spr{background:var(--gold)} .char.w .spr{background:var(--green)} .char.m .spr{background:var(--pink)}
+.char h3{font-family:var(--ui);font-weight:700;font-size:1.05rem;color:var(--ink);margin:.7rem 0 .15rem}
+.char .role{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.char p{font-size:.9rem;color:var(--ink2);margin-top:.5rem;line-height:1.5}
+.char .stat{margin-top:.7rem;font-family:var(--mono);font-size:.66rem;color:var(--muted);display:flex;gap:.8rem}
+.char .stat b{color:var(--cyan)}
+
+/* under the hood — spec rows */
+.specs{display:grid;gap:2px;background:var(--line);border:2px solid var(--line2);border-radius:7px;overflow:hidden}
+.spec{display:grid;grid-template-columns:170px 1fr;gap:1.1rem;padding:clamp(1rem,2.4vw,1.5rem);background:var(--panel);align-items:baseline}
+.spec .k{font-family:var(--mono);font-size:.78rem;color:var(--cyan);white-space:nowrap}
+.spec h3{font-family:var(--ui);font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:.3rem}
+.spec p{font-size:.94rem;color:var(--ink2)}
+.spec code{font-family:var(--mono);font-size:.85em;color:var(--gold);background:oklch(0.84 0.155 82 /.1);padding:.05em .35em;border-radius:3px}
+@media(max-width:620px){ .spec{grid-template-columns:1fr;gap:.4rem} }
+
+/* the climb */
+.climb-grid{display:grid;grid-template-columns:300px 1fr;gap:clamp(1.5rem,4vw,3rem);align-items:start}
+@media(max-width:880px){ .climb-grid{grid-template-columns:1fr} }
+.ascent{position:sticky;top:74px}
+@media(max-width:880px){ .ascent{position:static;max-width:330px;margin-inline:auto} }
+.ascent svg{display:block;width:100%;height:auto}
+.trail-bg{fill:none;stroke:oklch(1 0 0 /.1);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.trail-lit{fill:none;stroke:var(--pink);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;
+  filter:drop-shadow(0 0 5px var(--pink));stroke-dasharray:1;stroke-dashoffset:1;animation:trail 9s var(--ease) infinite}
+@keyframes trail{0%{stroke-dashoffset:1}55%,100%{stroke-dashoffset:0}}
+.ms-dot{fill:var(--bg);stroke:var(--pink);stroke-width:2}
+.ms-dot.peak{fill:var(--pink)}
+.ms-rank{font-family:var(--mono);font-size:12px;fill:var(--gold);font-weight:700}
+.ms-label{font-family:var(--mono);font-size:9px;fill:var(--muted)}
+.climber circle{fill:var(--ink)}
+.climber{filter:drop-shadow(0 0 7px var(--pink))}
+.climber-glyph{font-family:var(--mono);font-size:9px;font-weight:700;fill:var(--bg2);text-anchor:middle}
+@media (prefers-reduced-motion: reduce){.trail-lit{animation:none;stroke-dashoffset:0}.climber-motion{display:none}}
+
+.levels{display:grid;gap:.7rem}
+.lvl-hint{font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:.8rem}
+.lvl-hint b{color:var(--cyan)}
+.lvl{border:2px solid var(--line);border-radius:7px;background:var(--panel);transition:border-color .2s}
+.lvl[open]{border-color:var(--pink)}
+.lvl.boss[open]{border-color:var(--red)} .lvl.bonus[open]{border-color:var(--green)}
+.lvl-sum{list-style:none;cursor:pointer;display:grid;grid-template-columns:auto 1fr auto auto;gap:1rem;align-items:center;
+  padding:.9rem 1.1rem;transition:transform .2s var(--ease)}
+.lvl-sum::-webkit-details-marker{display:none}
+.lvl:not([open]) .lvl-sum:hover{transform:translateX(3px)}
+.lvl-sum:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:5px}
+.lvl .no{font-family:var(--mono);font-size:.66rem;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.lvl h3{font-family:var(--ui);font-weight:700;font-size:1.05rem;color:var(--ink)}
+.lvl .short{font-size:.88rem;color:var(--ink2);margin-top:.2rem;max-width:64ch}
+.lvl .pts{font-family:var(--mono);font-weight:700;font-size:.92rem;color:var(--gold);white-space:nowrap;text-align:right}
+.lvl .pts small{display:block;font-weight:400;font-size:.6rem;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.lvl .chev{font-family:var(--mono);font-size:1rem;color:var(--muted);transition:transform .25s var(--ease),color .2s;justify-self:end}
+.lvl[open] .chev{transform:rotate(90deg);color:var(--pink)}
+.lvl.boss .pts{color:var(--red)} .lvl.bonus .pts{color:var(--green)}
+.lvl-detail{padding:.2rem 1.1rem 1.2rem;border-top:2px solid var(--line)}
+.lvl-detail p{font-size:.93rem;color:var(--ink2);max-width:72ch;margin-top:1rem;line-height:1.62}
+.lvl-detail .src{display:inline-block;margin-top:.9rem;font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lvl-detail .src b{color:var(--cyan)}
+@media(max-width:560px){ .lvl-sum{grid-template-columns:1fr auto;gap:.3rem .6rem} .lvl-sum .pts{grid-column:1;text-align:left} .lvl-sum .chev{grid-row:1;grid-column:2} }
+
+/* training mode — experiment bars */
+.train{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(1.5rem,4vw,3rem);align-items:start}
+@media(max-width:880px){ .train{grid-template-columns:1fr} }
+.quote{font-family:var(--display);font-size:clamp(1.5rem,1.1rem+2vw,2.5rem);color:var(--ink);line-height:1.15}
+.quote .hi{color:var(--pink)}
+.exp{padding:clamp(1.1rem,2.5vw,1.4rem)}
+.exp .sub{font-size:.86rem;color:var(--muted);margin:.2rem 0 1.1rem}
+.bar{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:.7rem;padding:.4rem 0}
+.bar .nm{font-size:.84rem;color:var(--ink2)}
+.bar .tk{height:14px;border:1px solid var(--line2);border-radius:2px;background:oklch(0 0 0/.3);overflow:hidden;padding:1px}
+.bar .fl{height:100%;border-radius:1px;transform-origin:left;transform:scaleX(var(--v,0));transition:transform 1.1s var(--ease);
+  background-image:repeating-linear-gradient(90deg, currentColor 0 7px, transparent 7px 9px)}
+.bar .vl{font-family:var(--mono);font-weight:700;font-size:.82rem;text-align:right}
+.bar.bad{color:var(--red)} .bar.bad .vl{color:var(--red)}
+.bar.mid{color:var(--gold)} .bar.mid .vl{color:var(--gold)}
+.bar.win{color:var(--green)} .bar.win .vl{color:var(--green)}
+.exp .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-top:.5rem;padding-left:120px;text-transform:uppercase;letter-spacing:.06em}
+@media(max-width:480px){ .bar{grid-template-columns:88px 1fr 46px} .exp .axis{padding-left:88px} }
+
+/* lessons — CONTINUE screen */
+.lessons{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:clamp(.9rem,2vw,1.3rem)}
+.lesson{border:2px solid var(--line);border-radius:7px;background:var(--panel);padding:clamp(1.2rem,2.5vw,1.6rem)}
+.lesson .no{font-family:var(--mono);font-weight:700;font-size:.9rem;color:var(--cyan)}
+.lesson h3{font-family:var(--display);font-size:clamp(1.3rem,1.1rem+1.2vw,1.75rem);color:var(--ink);margin-top:.4rem}
+.lesson p{margin-top:.55rem;font-size:.93rem;color:var(--ink2)}
+
+/* credits */
+.credits{border-top:2px solid var(--line2);text-align:center}
+.credits h2{font-family:var(--display);font-size:clamp(1.9rem,1.3rem+3vw,3.4rem);color:var(--ink)}
+.credits h2 .hi{color:var(--green)}
+.credits .roll{max-width:60ch;margin:1.4rem auto 0;color:var(--ink2)}
+.credits .roll a{color:var(--cyan);text-decoration:none;border-bottom:1px solid var(--cyan)}
+.credits .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:2.2rem;text-align:left}
+.cr{border:2px solid var(--line);border-radius:7px;background:var(--panel);padding:1.2rem}
+.cr .h{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:.5rem}
+.cr p{font-size:.92rem;color:var(--ink2)}
+.cr a{color:var(--cyan);text-decoration:none;border-bottom:1px solid oklch(0.82 0.135 205/.4)}
+
+footer{border-top:2px solid var(--line2);padding-block:2.2rem}
+footer .wrap{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center}
+footer .go{font-family:var(--display);font-size:1.5rem;color:var(--red)}
+footer .lk{display:flex;gap:1.3rem;flex-wrap:wrap;align-items:center;font-family:var(--mono);font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+footer a{color:var(--ink2);text-decoration:none}
+footer a:hover{color:var(--gold)}
+footer .cp{color:var(--muted)}
+
+/* real footage — the CRT monitor */
+.footage{text-align:center}
+.monitor{position:relative;max-width:600px;margin:1.6rem auto 0;border:3px solid var(--line2);border-radius:10px;
+  background:var(--bg2);padding:10px;box-shadow:0 0 0 4px var(--bg),0 26px 70px -30px #000,0 0 60px -20px var(--pink)}
+.monitor .rec{position:absolute;top:18px;left:18px;z-index:2;display:flex;align-items:center;gap:.4rem;
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);
+  background:oklch(0 0 0/.55);padding:.25rem .5rem;border-radius:3px}
+.monitor .rec i{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red)}
+.monitor .glass{position:relative;border-radius:5px;overflow:hidden;line-height:0}
+.monitor img{display:block;width:100%;height:auto;image-rendering:pixelated}
+.monitor .glass::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(transparent 0 2px, oklch(0 0 0/.16) 2px 3px);
+  box-shadow:inset 0 0 70px 10px oklch(0 0 0/.35)}
+.footage .cap{margin:1rem auto 0;max-width:54ch;font-size:.95rem;color:var(--muted)}
+.footage .cap b{color:var(--ink2)}
+
+/* embedded footage / screenshots inside level details */
+.lvl-detail .shot{margin-top:1.1rem;border:2px solid var(--line2);border-radius:7px;overflow:hidden;background:var(--bg2);max-width:480px}
+.lvl-detail .shot img{display:block;width:100%;height:auto}
+.lvl-detail .shot .cap{font-family:var(--mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:.45rem .65rem;border-top:2px solid var(--line)}
+.lvl-detail .shot .cap b{color:var(--gold)}
+.lvl-detail .gif{max-width:360px}
+
+/* reveal */
+.rv{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+.rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){.rv{opacity:1;transform:none;transition:none}.bar .fl{transition:none}}
+</style>
+</head>
+<body>
+<div class="crt" aria-hidden="true"></div>
+
+<header class="hud">
+  <div class="wrap">
+    <span class="logo"><span class="coin">¢</span>MAZE&nbsp;CRAWLER</span>
+    <nav>
+      <a href="#play">how to play</a>
+      <a href="#brain">under the hood</a>
+      <a href="#climb">the climb</a>
+      <a href="#train">training</a>
+      <a href="#credits">credits</a>
+    </nav>
+    <span class="hi">HI-SCORE <b>1190</b> · RANK&nbsp;4</span>
+  </div>
+</header>
+
+<main>
+<section class="hero wrap" id="top">
+  <div class="hero-grid">
+    <div class="rv in">
+      <div class="p1"><span class="tag cy">P1 · ISABELLA</span><span class="rk">KAGGLE · MAZE CRAWLER · best rank <b>#4</b></span></div>
+      <h1 class="disp">MAZE<br><span class="l2">CRAWLER</span></h1>
+      <p class="lede">A <b>development blog for <a href="https://www.kaggle.com/competitions/maze-crawler/overview" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none;border-bottom:2px solid var(--cyan)">Kaggle&rsquo;s Maze&nbsp;Crawler competition</a></b> — a two-player scrolling-maze RTS. The story of my journey from rank 400 to the top 4: the levels, the lessons, and what hundreds of games taught me about <b>discipline, measurement, and survival</b>.</p>
+      <div class="start">
+        <a class="btn btn-p" href="#climb">▶ Press start</a>
+        <a class="btn btn-g" href="https://www.kaggle.com/competitions/maze-crawler/overview" target="_blank" rel="noopener">Competition ↗</a>
+        <span class="press blink">◂ insert coin to continue</span>
+      </div>
+    </div>
+
+    <div class="screen rv in" style="transition-delay:.08s">
+      <div class="bar"><span>attract mode</span><span class="grow"></span><span>seed 42 · <b id="rstep">step 000</b></span></div>
+      <canvas id="maze" width="640" height="440" aria-label="An animated scrolling maze: a factory climbs north while the scroll boundary rises from the south and energy mines glow."></canvas>
+      <div class="foot"><span>north ↑ the factory runs</span><span><b>scroll ↑ the dark follows</b></span></div>
+    </div>
+  </div>
+</section>
+
+<div class="scores">
+  <div class="wrap">
+    <div class="s"><div class="lab">High score</div><div class="num">1190</div></div>
+    <div class="s"><div class="lab">Best rank</div><div class="num pk">#4</div></div>
+    <div class="s"><div class="lab">Maze width</div><div class="num cy">20</div></div>
+    <div class="s"><div class="lab">Games replayed</div><div class="num">100s</div></div>
+  </div>
+</div>
+
+<section class="sec wrap footage" id="footage">
+  <div class="shead rv" style="margin-inline:auto;text-align:center;max-width:60ch">
+    <span class="tag gr">▸ Actual footage</span>
+    <h2 style="margin-inline:auto">Not a mockup — a real game.</h2>
+    <p style="margin-inline:auto">A live Kaggle replay: my agent (<b style="color:var(--ink)">P2, right side</b>) out-banks an opponent on energy. Two mirrored mazes, the scroll closing in, crystals and mining nodes scattered through the fog.</p>
+  </div>
+  <div class="monitor rv">
+    <span class="rec"><i></i> REC · KAGGLE REPLAY</span>
+    <div class="glass"><img src="media/competition_example.gif" alt="A real Maze Crawler replay: two side-by-side mazes, Isabella Wu winning on the right." loading="lazy" decoding="async" /></div>
+  </div>
+  <p class="cap rv">The bright original render — this is the actual game the dark arcade screen above is paying tribute to. <b>Isabella Wu &middot; +47 energy &middot; win.</b></p>
+</section>
+
+<section class="sec wrap" id="play">
+  <div class="shead rv">
+    <span class="tag">▸ How to play</span>
+    <h2>A maze that eats you from behind.</h2>
+    <p>Two factories start at the bottom of a 20-column maze that scrolls relentlessly north. Fall behind the boundary and you&rsquo;re crushed. Fog of war hides the walls, the crystals, and the enemy. Out-survive your opponent — or out-bank them on energy when the clock runs out.</p>
+  </div>
+  <div style="margin-bottom:1.4rem" class="rv"><span class="tag cy">◂ Select your roster</span></div>
+  <div class="roster">
+    <div class="char f rv"><div class="spr">F</div><h3>Factory</h3><div class="role">the king · must not die</div><p>Builds robots, jumps every 20 turns, and is an unlimited well of energy. Lose it and the game is over.</p><div class="stat"><span>MOVE <b>slow</b></span><span>HP <b>∞ energy</b></span></div></div>
+    <div class="char s rv" style="transition-delay:.05s"><div class="spr">S</div><h3>Scout</h3><div class="role">eyes · 50 cost</div><p>Cheap, fast vision. Lifts the fog, grabs crystals, and carries value home before it dies.</p><div class="stat"><span>MOVE <b>fast</b></span><span>VISION <b>5</b></span></div></div>
+    <div class="char w rv" style="transition-delay:.1s"><div class="spr">W</div><h3>Worker</h3><div class="role">muscle · 200 cost</div><p>The wall-breaker. Clears the lane ahead of a blocked factory; builds and removes walls.</p><div class="stat"><span>MOVE <b>med</b></span><span>CAP <b>300</b></span></div></div>
+    <div class="char m rv" style="transition-delay:.15s"><div class="spr">M</div><h3>Miner</h3><div class="role">economy · 300 cost</div><p>The long game. Transforms on a node into a mine that prints energy — if you can keep it alive.</p><div class="stat"><span>MOVE <b>med</b></span><span>MINE <b>+50/turn</b></span></div></div>
+  </div>
+</section>
+
+<section class="sec wrap" id="brain">
+  <div class="shead rv">
+    <span class="tag go">▸ Under the hood</span>
+    <h2>Not a neural net. A graph, a heuristic, and four jobs.</h2>
+    <p>I built a strong algorithmic baseline first — behavior you can reason about and debug — starting from greedy moves, adding per-unit memory, then upgrading to real search. The core turned out to be a data-structures problem in disguise.</p>
+  </div>
+  <div class="specs">
+    <div class="spec rv"><span class="k">// graph search</span><div><h3>The maze is a graph</h3><p>Every reachable cell is a node, every legal move an edge. Once I stopped seeing tiles and saw a graph, <code>BFS</code> gave shortest paths around walls — and wasting a turn can mean death.</p></div></div>
+    <div class="spec rv"><span class="k">// state</span><div><h3>Cooldown is part of the state</h3><p>Once jumps entered the picture, position alone couldn&rsquo;t describe a robot&rsquo;s future. The search state became <code>(col, row, jump_cd)</code> — location plus mobility.</p></div></div>
+    <div class="spec rv"><span class="k">// data structures</span><div><h3>A deque and a visited set</h3><p>A <code>deque</code> frontier, a <code>set</code> for visited states, tuples for positions — the queue-and-hash-set pattern straight out of <code>CSCI&nbsp;104</code>, made real by a maze that punishes a wrong expansion.</p></div></div>
+    <div class="spec rv"><span class="k">// heuristic</span><div><h3>Rank cheap, route careful</h3><p><code>Manhattan</code> distance ranks crystals, nodes and frontiers for almost nothing; <code>BFS</code> then commits to the chosen target safely. Heuristic where info is uncertain, search where structure is reliable.</p></div></div>
+    <div class="spec rv"><span class="k">// roles + memory</span><div><h3>Four units, one anchor, short memories</h3><p>The factory is the strategic anchor; scouts, workers and miners each have a job. Persistent per-unit memory adds lightweight tabu behavior so units stop oscillating in corridors.</p></div></div>
+  </div>
+</section>
+
+<section class="sec wrap" id="climb">
+  <div class="shead rv">
+    <span class="tag">▸ Level select</span>
+    <h2>From 400 to the top 4, one fixed mistake at a time.</h2>
+    <p>Almost none of the gains came from a clever new algorithm. They came from sitting with losing replays and removing the bad behavior I found. Every level below is a real ladder jump.</p>
+  </div>
+  <div class="climb-grid">
+    <div class="ascent rv">
+      <div class="panel">
+        <div class="panel-bar"><span class="dots"><i></i><i></i><i></i></span><span>the ascent</span><span class="grow"></span><b>400 → 1190</b></div>
+        <svg viewBox="0 0 240 560" role="img" aria-label="A climbing route rising from rank 400 at base camp to the top 4 at the summit.">
+          <path d="M0 560 L70 360 L120 420 L185 250 L240 440 L240 560 Z" fill="oklch(1 0 0 /.035)"/>
+          <path d="M0 560 L55 430 L150 480 L210 360 L240 410 L240 560 Z" fill="oklch(0.71 0.215 352 /.05)"/>
+          <path id="route" class="trail-bg" d="M 52 524 L 52 452 L 188 416 L 188 338 L 52 302 L 52 224 L 188 188 L 188 112 L 120 56"/>
+          <path class="trail-lit" pathLength="1" d="M 52 524 L 52 452 L 188 416 L 188 338 L 52 302 L 52 224 L 188 188 L 188 112 L 120 56"/>
+          <g><circle class="ms-dot" cx="52" cy="524" r="5"/><text class="ms-rank" x="64" y="520">400</text><text class="ms-label" x="64" y="533">base camp</text></g>
+          <g><circle class="ms-dot" cx="188" cy="416" r="5"/><text class="ms-rank" x="176" y="412" text-anchor="end">670</text><text class="ms-label" x="176" y="425" text-anchor="end">search &amp; stability</text></g>
+          <g><circle class="ms-dot" cx="52" cy="302" r="5"/><text class="ms-rank" x="64" y="298">730</text><text class="ms-label" x="64" y="311">energy reserve</text></g>
+          <g><circle class="ms-dot" cx="188" cy="188" r="5"/><text class="ms-rank" x="176" y="184" text-anchor="end">~1100</text><text class="ms-label" x="176" y="197" text-anchor="end">top 10 · restraint</text></g>
+          <g transform="translate(120 56)"><path d="M0 -2 L0 -34" stroke="var(--pink)" stroke-width="2"/><path d="M0 -34 L20 -28 L0 -22 Z" fill="var(--pink)"/></g>
+          <g><circle class="ms-dot peak" cx="120" cy="56" r="6"/><text class="ms-rank" x="120" y="42" text-anchor="middle" style="font-size:13px">TOP 4</text></g>
+          <g class="climber climber-motion"><circle r="9"/><text class="climber-glyph" y="3">F</text>
+            <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.55;1" calcMode="linear"><mpath href="#route"/></animateMotion>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="levels-col">
+    <p class="lvl-hint rv">▸ <b>Click a level</b> to read the full entry from the dev log.</p>
+    <div class="levels">
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 1</span><div><h3>Search &amp; stability</h3><p class="short">Greedy moves out, deliberate BFS planning in — jump-aware routing and destination reservation so units stopped colliding with themselves.</p></div><span class="pts">~670<small>rating</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>One of the first really encouraging moments was the bot moving from roughly the 400 range into the 670 range. The improvement came from several changes working together: replacing local greedy movement with deliberate search-based planning, improving factory survival through better northward routing and jump-aware navigation, reducing friendly interference through destination reservation, using maze symmetry to make better decisions before the full map is visible, and preserving mining-node locations instead of rediscovering them. The whole bot started feeling less random — and in a ladder setting, avoiding one bad loss is often worth more than finding one flashy win.</p><span class="src">dev log · <b>Search &amp; Stability</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 2</span><div><h3>Factory danger mode</h3><p class="short">When the scroll gets close, drop everything: stop feeding workers, stop spawning, and switch to survival-only routing with jumps as the escape hatch.</p></div><span class="pts">+survive<small>fewer deaths</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>Sitting with losing replays showed the factory still making wrong choices once the scroll got close — spending energy on support behavior, drifting sideways or backward, even spawning units at the exact moment survival should have been the only thing that mattered. The fix was an explicit factory danger mode: when the factory gets too close to the southern boundary, normal convoy logic is overridden. It stops feeding workers, stops spawning, and switches to a survival-only routing mode focused on moving NORTH/EAST/WEST with no low-value detours, with jump logic kept as an emergency escape. Strong bots are often improved less by adding complexity and more by removing bad behavior in the highest-risk states.</p><span class="src">dev log · <b>Factory Danger Mode</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 3</span><div><h3>Stop bankrupting the factory</h3><p class="short">One game it hit zero energy by turn 191 and just waited to die. Stricter reserves made factory energy a protected survival resource, not a battery.</p></div><span class="pts">~730<small>rating</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>A different kind of failure: the factory wasn&rsquo;t dying because it was trapped too low — it was slowly bankrupting itself. In one episode it looked fine positionally for a long time but reached 0 energy by roughly turn 191, then was basically a dead object waiting for the scroll to finish the job. The problem was economic collapse from overspending on workers and transferring too much energy into them. The fix: stricter factory energy reserve rules — worker, scout, and miner production now require larger minimum buffers, and factory-to-worker transfers are only allowed when the factory is both safe and meaningfully rich. This coincided with a jump from the 670 range into the 730 range.</p><span class="src">dev log · <b>Energy Reserve Fix</b></span></div>
+      </details>
+      <details class="lvl boss rv">
+        <summary class="lvl-sum"><span class="no">BOSS</span><div><h3>&ldquo;AI TOOK MY JOB AND YOUR JOB!&rdquo;</h3><p class="short">Lost to a bot that opened an early mine and snowballed energy uncontested. The wake-up call: a stable convoy still loses to compounding income.</p></div><span class="pts">DEFEAT<small>learn &amp; retry</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>One of the clearest strategic wake-up calls came from losing to a bot named &ldquo;AI TOOK MY JOB AND YOUR JOB!&rdquo;. Even with a relatively stable convoy, the agent could still lose badly to an opponent that got an early mine economy running and then snowballed factory energy from there. The opponent transformed a miner into a mine very early and used that long-term income to outscale the convoy strategy — not a sudden tactical collapse, but a slower strategic defeat from being economically outclassed. The response: make the miner policy respond more aggressively when known mining nodes are nearby and realistically reachable, while still treating factory survival as the top priority. Safety and economy aren&rsquo;t competing ideas — a competitive agent eventually needs both.</p>
+        <div class="shot gif"><img src="media/battle_may_19.gif" alt="Footage of the loss to the AI TOOK MY JOB AND YOUR JOB! bot." loading="lazy" decoding="async" /><div class="cap">actual footage · <b>the loss that started the economy work</b></div></div>
+        <span class="src">dev log · <b>Early Mine Economy Response</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 4</span><div><h3>Know when not to build</h3><p class="short">The biggest jump was restraint — in no-mine games, cap the workers, delay the scouts, and hoard for the tiebreak. Then clamp speculative scouts entirely.</p></div><span class="pts">top 10<small>~1100</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>A late-game pattern kept showing up: poor production decisions in long tiebreak-heavy games. In one replay the factory survived all the way to the step-500 tiebreaker but still lost, because it spent too much of its economy on extra workers and a scout without ever turning that into a mine. So the production policy got tighter: when there are no known open mining nodes, the factory treats that as a signal to play much leaner — worker count capped, scouts delayed behind a higher energy threshold, larger production reserved for a real mine plan. Scout production was then clamped harder still — no scouts in no-mine games, none while stranded zero-energy scouts are on the board. This was the strongest leaderboard jump so far, into the top 10 and the ~1100 range. Restraint turned out to matter as much as pathfinding.</p>
+        <div class="shot"><img src="media/top-10.jpg" alt="Kaggle leaderboard showing a top-10 placement." loading="lazy" decoding="async" /><div class="cap">real leaderboard · <b>into the top 10</b></div></div>
+        <span class="src">dev log · <b>Lean Production + Scout Clamp</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 5</span><div><h3>Commit, then cut losses</h3><p class="short">A miner only counts if it converts. Commitment filters, explicit abort logic, and stale-miner recovery taught the bot to walk away from a failing plan.</p></div><span class="pts">#7 → #5<small>1133 → 1175</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>Recognizing that mining mattered wasn&rsquo;t enough — the bot could still commit to the wrong miner at the wrong time, building one off weak information that never transformed and behaved like a 300-energy sink. Three fixes, three small ladder steps. <b>Commitment filter:</b> early miners now require a nearby visible node rather than only a remembered one, a healthier energy cushion, and no speculative follow-ups once a friendly mine exists. <b>Abort logic:</b> miners evaluate whether a node plan is still credible by distance, scroll pressure, and energy — if not, they stop acting like an investment and return toward the factory to salvage value. <b>Stale-miner recovery:</b> lightweight per-unit memory notices when a miner is stuck too long without converting and treats it as a failed investment. Rank 7 → 5, roughly 1133 → 1175.</p>
+        <div class="shot"><img src="media/no-5.jpg" alt="Kaggle leaderboard showing rank 5." loading="lazy" decoding="async" /><div class="cap">real leaderboard · <b>rank 5 · ~1175</b></div></div>
+        <span class="src">dev log · <b>Miner Commitment, Abort &amp; Recovery</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 6</span><div><h3>Don&rsquo;t trade factories at a loss</h3><p class="short">A factory-trade filter: estimate where the enemy factory can move next turn and refuse a mutual collision unless the tiebreak favors us.</p></div><span class="pts">+win<small>cleaner endgames</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>A completely different kind of mistake showed up in late-game routing. Sometimes the bot chose a move that looked tactically reasonable but led straight into a mutual factory collision that favored the opponent on the tiebreak. In the replay that exposed it, both factories died on the same turn, but the opponent still had one extra surviving unit — so the collision wasn&rsquo;t neutral at all, it was a losing trade dressed up as a dramatic ending. The fix: a factory-trade filter. The bot estimates the cells the enemy factory could also occupy next turn and compares surviving non-factory unit counts on both sides. If the opponent has the tiebreak advantage, the factory becomes much more cautious about moves or jumps that allow a mutual collision, and reroutes to a safer path. A trade is fine when the tiebreak is yours — a blunder when it isn&rsquo;t.</p><span class="src">dev log · <b>Factory Trade Filter</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 7</span><div><h3>Win the row race</h3><p class="short">Several losses had energy to spare — the problem was height. A no-idle fallback made the factory fight for vertical progress every single turn instead of settling.</p></div><span class="pts">#4<small>~1190</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>This batch changed how I thought about late games. Several losses happened with plenty of factory energy still left — the problem wasn&rsquo;t bankruptcy, it was height. What kept happening was subtle: the factory would fail to find a satisfying long route, fall back to something passive, and quietly lose a row or two. That sounds small until the scroll makes those rows the whole game. So late-game routing stopped being all-or-nothing — if the ideal long push isn&rsquo;t there, the factory now looks harder for the best reachable northward progress instead of treating the turn as dead. A stronger no-idle fallback followed: when tied or behind on rows, the factory has much less permission to settle and must keep finding some form of safe vertical progress. This run reached rank 4, around 1190.</p>
+        <div class="shot"><img src="media/no-4.jpg" alt="Kaggle leaderboard showing Isabella Wu at rank 4 with 1190.8, behind the AI TOOK MY JOB bot at rank 1." loading="lazy" decoding="async" /><div class="cap">real leaderboard · <b>rank 4 · 1190.8 — boss still at #1</b></div></div>
+        <span class="src">dev log · <b>Late-Game North Progress &amp; No-Idle Recovery</b></span></div>
+      </details>
+      <details class="lvl rv">
+        <summary class="lvl-sum"><span class="no">LV 8</span><div><h3>Study the champions</h3><p class="short">The strongest replays leaned off workers, opened with scouts, and converted node info into mines fast. I borrowed the style — early tempo, clean commitments.</p></div><span class="pts">+style<small>opening tempo</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>Reviewing strong opponents&rsquo; replays was useful for a different reason than reviewing losses — it showed what clean, effective play looked like when it was working. The biggest pattern wasn&rsquo;t one exact recipe but a style: the strongest replays were much less dependent on workers than I expected, much more comfortable opening with scouts, and much faster about turning real node information into miner conversions. They also avoided the awkward middle ground where the factory spends on support without gaining either map control or a real mine economy. That changed the opening in a specific way: miner-first openings are now rarer unless the node signal is genuinely strong, early workers need a more direct justification, and scout-first lines get more room before the factory commits. Not copying one player move-for-move — borrowing the lesson that early tempo and clean commitments beat filling the board.</p><span class="src">dev log · <b>Studying Strong Opponents</b></span></div>
+      </details>
+      <details class="lvl bonus rv">
+        <summary class="lvl-sum"><span class="no">BONUS</span><div><h3>Build the simulator → economy unlocked</h3><p class="short">Got the game running locally, A/B-tested every idea, and finally shipped a working mine-to-factory economy the harness confirmed.</p></div><span class="pts">NEW<small>measured</small></span><span class="chev">▸</span></summary>
+        <div class="lvl-detail"><p>For a long time every change was an educated guess validated days later by the ladder. So I got the game running locally — Kaggle&rsquo;s <code style="font-family:var(--mono);color:var(--gold)">crawl</code> environment ships inside <code style="font-family:var(--mono);color:var(--gold)">kaggle-environments</code> — and wrote a harness that plays a candidate against a frozen build over many seeds, both sides, and reports win-rate. The loop became propose, measure, keep only what wins. It immediately killed five plausible survival ideas I&rsquo;d have shipped on faith (convoy escort 18%, force-north 8%, conserve-jump 2%, dodge 40%) and confirmed the one that wasn&rsquo;t obvious: a working mine-to-factory economy, where miners reliably transform on nodes and the factory detours to harvest its own mines before the scroll crushes them. It tripled the energy in mining games — measured, not hoped. <span style="color:var(--muted)">More in Training Mode ↓</span></p><span class="src">dev log · <b>Local Simulation &amp; Economy</b></span></div>
+      </details>
+    </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec wrap" id="train">
+  <div class="shead rv">
+    <span class="tag gr">▸ Training mode</span>
+    <h2>Then I stopped guessing.</h2>
+    <p>For a long time every change was an educated guess, validated days later by the ladder. So I got the game running locally and wrote a harness that plays a candidate against a frozen build over many seeds — both sides — and reports win-rate. The loop became <em>propose, measure, keep only what wins</em>.</p>
+  </div>
+  <div class="train">
+    <p class="quote rv">Replay intuition is a <span class="hi">hypothesis</span>, not a result. The only honest way to tell them apart is to <span class="hi">run the games</span>.</p>
+    <div class="panel rv" style="transition-delay:.08s" id="exp">
+      <div class="panel-bar"><span class="dots"><i></i><i></i><i></i></span><span>bench.py — win-rate vs prior build</span></div>
+      <div class="exp">
+        <div class="sub">Every &ldquo;obviously good&rdquo; survival tweak I was sure about. The bench disagreed.</div>
+        <div class="bar bad" data-v=".18"><span class="nm">convoy escort</span><span class="tk"><span class="fl"></span></span><span class="vl">18%</span></div>
+        <div class="bar bad" data-v=".08"><span class="nm">force-north</span><span class="tk"><span class="fl"></span></span><span class="vl">8%</span></div>
+        <div class="bar bad" data-v=".02"><span class="nm">conserve jump</span><span class="tk"><span class="fl"></span></span><span class="vl">2%</span></div>
+        <div class="bar mid" data-v=".40"><span class="nm">dodge enemy</span><span class="tk"><span class="fl"></span></span><span class="vl">40%</span></div>
+        <div class="bar win" data-v=".62"><span class="nm">mine economy</span><span class="tk"><span class="fl"></span></span><span class="vl">KEPT</span></div>
+        <div class="axis"><span>0%</span><span>50% — coin flip</span><span>100%</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="rv" style="margin-top:clamp(2rem,4vw,3rem);max-width:62ch;font-size:clamp(1.02rem,1rem+.3vw,1.18rem);color:var(--ink2)">The simulator earned its keep immediately — it killed five plausible ideas I&rsquo;d have shipped on faith, and confirmed the one that wasn&rsquo;t obvious: a working <b style="color:var(--ink)">mine-to-factory economy</b>, where miners reliably convert nodes and the factory detours to harvest them before the scroll takes them away. <span style="color:var(--muted)">Tripled the energy in mining games — measured, not hoped.</span></p>
+</section>
+
+<section class="sec wrap" id="learned">
+  <div class="shead rv">
+    <span class="tag">▸ Continue?</span>
+    <h2>The lessons outlasted the code.</h2>
+  </div>
+  <div class="lessons">
+    <div class="lesson rv"><div class="no mono">01</div><h3>Remove, don&rsquo;t add</h3><p>Most of the climb was cutting bad behavior — over-building, passive turns, doomed miners — not inventing clever new mechanics. Restraint scored.</p></div>
+    <div class="lesson rv" style="transition-delay:.05s"><div class="no mono">02</div><h3>Measure or you&rsquo;re guessing</h3><p>A change that <em>feels</em> better and a change that <em>is</em> better look identical until you run the games. The harness was worth more than any single tweak.</p></div>
+    <div class="lesson rv" style="transition-delay:.1s"><div class="no mono">03</div><h3>Survival is the floor</h3><p>Energy is worthless if the factory dies. The expensive mistake almost always happens earlier than the loss screen suggests.</p></div>
+    <div class="lesson rv" style="transition-delay:.15s"><div class="no mono">04</div><h3>Value has to be kept</h3><p>A full mine isn&rsquo;t an advantage until a unit drains it home. Nominal value and usable value are not the same thing.</p></div>
+  </div>
+</section>
+
+<section class="sec credits wrap" id="credits">
+  <span class="tag gr">▸ Credits</span>
+  <h2 style="margin-top:1rem">Still <span class="hi">crawling</span> north.</h2>
+  <p class="roll">This started as a Kaggle competition and became a practical way to apply data structures and algorithms in a live environment — graphs, <code>BFS</code>, queues, shortest-path search, heuristics, and tradeoffs under imperfect information. The kind of thing the <a href="https://bytes.usc.edu/cs104/homework/hw3/#problem-5---rush-hour-40" target="_blank" rel="noopener">CSCI&nbsp;104 Rush&nbsp;Hour</a> homework hints at, scaled up to a real-time game.</p>
+  <div class="grid">
+    <div class="cr"><div class="h">Coursework</div><p>Programming discipline and modular design from <b style="color:var(--ink)">USC CSCI 103</b>; search, graphs, and data-structure tradeoffs from <b style="color:var(--ink)">CSCI 104</b> — made tangible by a maze that punished every wrong expansion.</p></div>
+    <div class="cr"><div class="h">Why it matters</div><p>Applied algorithmic decision-making under uncertainty: pathfinding, multi-agent coordination, resource management, and partial observability — concrete, testable, and a foundation for learning-based work later.</p></div>
+    <div class="cr"><div class="h">What&rsquo;s next</div><p>Keeping a mine&rsquo;s income alive across the whole run, a stronger sparring opponent for survival tuning, and maybe reinforcement learning on top of the heuristics that got it this far.</p></div>
+  </div>
+  <div class="start" style="justify-content:center;margin-top:2.4rem">
+    <a class="btn btn-p" href="https://github.com/wuisabel-gif/maze-crawler" target="_blank" rel="noopener">▶ View the repo ↗</a>
+    <a class="btn btn-g" href="#top">↑ Back to title</a>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="go disp">GAME OVER</span>
+    <div class="lk">
+      <a href="https://www.kaggle.com/competitions/maze-crawler/overview" target="_blank" rel="noopener">Kaggle</a>
+      <a href="https://github.com/wuisabel-gif/maze-crawler" target="_blank" rel="noopener">GitHub</a>
+      <span class="cp">© 2026 wuisabel-gif · insert coin</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const els = document.querySelectorAll('.rv:not(.in)');
+  if(reduce || !('IntersectionObserver' in window)){ els.forEach(e=>e.classList.add('in')); }
+  else{
+    const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{rootMargin:'0px 0px -8% 0px',threshold:.12});
+    els.forEach(e=>io.observe(e));
+  }
+  const exp=document.getElementById('exp');
+  if(exp){
+    const fill=()=>exp.querySelectorAll('.bar').forEach(b=>b.querySelector('.fl').style.setProperty('--v',b.dataset.v));
+    if(reduce) fill();
+    else{ const io2=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){fill();io2.disconnect();}})},{threshold:.35}); io2.observe(exp); }
+  }
+})();
+
+/* ---------- the maze (attract mode) ---------- */
+(function(){
+  const cv=document.getElementById('maze'); if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stepEl=document.getElementById('rstep');
+  const COLS=16; let dpr=1,W=0,H=0,cell=0;
+  const css=getComputedStyle(document.documentElement);
+  const PINK=css.getPropertyValue('--pink').trim()||'#ec46b0';
+  const CYAN=css.getPropertyValue('--cyan').trim()||'#5fd5e8';
+  const RED=css.getPropertyValue('--red').trim()||'#e0392c';
+  const GREEN=css.getPropertyValue('--green').trim()||'#4fe08a';
+  const INK='#efece4';
+  function wallAt(c,r){const h=Math.sin(c*12.9898+r*78.233)*43758.5453;return h-Math.floor(h);}
+  function resize(){const rect=cv.getBoundingClientRect();dpr=Math.min(2,window.devicePixelRatio||1);W=rect.width;H=rect.height;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);cell=W/COLS;}
+  resize(); if('ResizeObserver' in window) new ResizeObserver(resize).observe(cv);
+  let scroll=0,fRow=6,fCol=8,t=0,last=0;
+  let mines=[{c:4,r:14,e:0},{c:11,r:20,e:0},{c:6,r:30,e:0},{c:12,r:40,e:0}];
+  const rows=()=>Math.ceil(H/cell)+1;
+  function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+  function draw(dt){
+    t+=dt; const sp=reduce?0:dt*0.0016; scroll+=sp; fRow+=sp*1.02; if(!reduce) fCol=8+Math.sin(t*0.0006)*3.4;
+    if(stepEl) stepEl.textContent='step '+String(Math.min(500,Math.floor(scroll*4))).padStart(3,'0');
+    ctx.clearRect(0,0,W,H);
+    const rv=rows(),base=Math.floor(scroll),frac=scroll-base;
+    ctx.lineWidth=1;
+    for(let i=-1;i<rv+1;i++){const wr=base+i,y=H-(i-frac)*cell;
+      for(let c=0;c<COLS;c++){const x=c*cell,w=wallAt(c,wr);
+        ctx.strokeStyle='rgba(120,150,200,0.06)';ctx.strokeRect(x,y-cell,cell,cell);
+        if(w>0.62){ctx.strokeStyle='rgba(95,213,232,0.30)';ctx.beginPath();ctx.moveTo(x,y-cell);ctx.lineTo(x+cell,y-cell);ctx.stroke();}
+        if(w>0.30&&w<0.40){ctx.strokeStyle='rgba(95,213,232,0.24)';ctx.beginPath();ctx.moveTo(x+cell,y-cell);ctx.lineTo(x+cell,y);ctx.stroke();}
+      }}
+    mines.forEach(m=>{ if(m.r<scroll) return; const y=H-(m.r-scroll)*cell-cell/2,x=m.c*cell+cell/2;
+      if(!reduce) m.e=Math.min(1,m.e+dt*0.0004); const rad=cell*(0.16+0.16*m.e);
+      const g=ctx.createRadialGradient(x,y,0,x,y,rad*3.2);g.addColorStop(0,PINK);g.addColorStop(.32,'rgba(236,70,176,0.30)');g.addColorStop(1,'rgba(236,70,176,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,rad*3.2,0,7);ctx.fill();
+      ctx.fillStyle=PINK; ctx.fillRect(x-rad*0.4,y-rad*0.4,rad*0.8,rad*0.8); });
+    const dg=ctx.createLinearGradient(0,H,0,H-cell*2.5);dg.addColorStop(0,'rgba(190,30,30,0.55)');dg.addColorStop(1,'rgba(190,30,30,0)');
+    ctx.fillStyle=dg;ctx.fillRect(0,H-cell*2.5,W,cell*2.5);
+    ctx.strokeStyle=RED;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,H-1);ctx.lineTo(W,H-1);ctx.stroke();
+    const fog=ctx.createLinearGradient(0,0,0,cell*3);fog.addColorStop(0,'rgba(18,16,30,0.95)');fog.addColorStop(1,'rgba(18,16,30,0)');
+    ctx.fillStyle=fog;ctx.fillRect(0,0,W,cell*3);
+    const fx=fCol*cell+cell/2,fy=H-(fRow-scroll)*cell-cell/2,fr=cell*0.32;
+    const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,fr*4);fg.addColorStop(0,'rgba(239,236,228,0.45)');fg.addColorStop(1,'rgba(239,236,228,0)');
+    ctx.fillStyle=fg;ctx.beginPath();ctx.arc(fx,fy,fr*4,0,7);ctx.fill();
+    ctx.fillStyle=INK; rr(ctx,fx-fr,fy-fr,fr*2,fr*2,3);ctx.fill();
+    ctx.fillStyle='rgba(18,16,30,0.92)';ctx.font='700 '+Math.round(cell*0.34)+'px JetBrains Mono, monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('F',fx,fy+1);
+    const wy=H-(fRow+1-scroll)*cell-cell/2; ctx.fillStyle=GREEN; ctx.fillRect(fx-cell*0.1,wy-cell*0.1,cell*0.2,cell*0.2);
+    mines.forEach(m=>{ if(m.r<scroll-1){m.r=scroll+rv+6+Math.random()*10;m.c=1+Math.floor(Math.random()*(COLS-2));m.e=0;} });
+  }
+  let raf=0; function loop(ts){const dt=Math.min(48,ts-last||16);last=ts;draw(dt);raf=requestAnimationFrame(loop);}
+  if(reduce){draw(0);}
+  else{ last=performance.now();raf=requestAnimationFrame(loop);
+    if('IntersectionObserver' in window) new IntersectionObserver((e)=>{e.forEach(en=>{ if(en.isIntersecting){ if(!raf){last=performance.now();raf=requestAnimationFrame(loop);} } else { cancelAnimationFrame(raf);raf=0; } })},{threshold:0}).observe(cv);
+  }
+})();
+</script>
+</body>
+</html>
